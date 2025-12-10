@@ -8,6 +8,7 @@ from discord.ext import commands
 from systems.quests.quest_manager import QuestManager
 quest_manager = QuestManager()
 print("QUEST MANAGER INITIALIZED")
+print(discord.__version__)
 
 # -----------------------------
 # Environment Setup
@@ -79,9 +80,7 @@ async def on_ready():
     guild_obj = discord.Object(id=GUILD_ID)
 
     try:
-        await bot.tree.clear_commands(guild=guild_obj)
-        print("Cleared old guild commands.")
-
+        # IMPORTANT: clear_commands removed
         cmds = await bot.tree.sync(guild=guild_obj)
         print(f"Synced {len(cmds)} commands to guild: {GUILD_ID}")
 
