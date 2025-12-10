@@ -1,62 +1,58 @@
-from typing import Optional, List, Dict
 from dataclasses import dataclass, field
-from datetime import date
-
 
 @dataclass
 class InventoryItem:
     quest_id: str
     item_name: str
-    collected: bool = True     # mainly for FETCH quests
+    collected: bool = True
 
 
+@dataclass
 class PlayerState:
-    """
-    Holds a user's daily quest, completion status, and inventory.
-    Traditional class is used because behavior & methods will expand over time.
-    """
-    def __init__(self, user_id: int):
-        self.user_id = str(user_id)
-        self.daily_quest: Optional[Dict] = None
-        self.inventory: List[InventoryItem] = []
+    user_id: int
+    daily_quest: dict = field(default_factory=dict)
+    inventory: list = field(default_factory=list)
 
-    # ---------------------
-    # DAILY QUEST FUNCTIONS
-    # ---------------------
-    def assign_daily_quest(self, quest_id: str):
-        self.daily_quest = {
-            "quest_id": quest_id,
-            "assigned_date": date.today().isoformat(),
-            "completed": False
+    # --------------------------
+    # Convert PlayerState → dict
+    # --------------------------
+    def to_dict(self):
+        return {
+            "daily_quest": self.daily_quest,
+            "inventory": [
+                {
+                    "quest_id": item.quest_id,
+                    "item_name": item.item_name,
+                    "collected": item.collected
+                }
+                for item in self.inventory
+            ]
         }
 
-    def is_daily_quest(self, quest_id: str) -> bool:
-        return (
-            self.daily_quest is not None
-            and self.daily_quest.get("quest_id") == quest_id
+    # --------------------------
+    # Convert dict → PlayerState
+    # --------------------------
+    @staticmethod
+    def from_dict(data: dict):
+        ps = PlayerState(
+            user_id=data.get("user_id", 0),
+            daily_quest=data.get("daily_quest", {})
         )
 
-    def has_completed_today(self) -> bool:
-        if not self.daily_quest:
-            return False
-        return self.daily_quest.get("assigned_date") == date.today().isoformat() \
-               and self.daily_quest.get("completed") is True
+        inv_list = data.get("inventory", [])
+        for item in inv_list:
+            ps.inventory.append(
+                InventoryItem(
+                    quest_id=item["quest_id"],
+                    item_name=item["item_name"],
+                    collected=item.get("collected", True)
+                )
+            )
 
-    def complete_daily_quest(self):
-        if self.daily_quest:
-            self.daily_quest["completed"] = True
+        return ps
 
-    # ---------------------
-    # INVENTORY FUNCTIONS
-    # ---------------------
-    def add_item(self, item: InventoryItem):
-        self.inventory.append(item)
-
-    def get_item_for_quest(self, quest_id: str) -> Optional[InventoryItem]:
-        for item in self.inventory:
-            if item.quest_id == quest_id:
-                return item
-        return None
-
-    def remove_item(self, quest_id: str):
-        self.inventory = [i for i in self.inventory if i.quest_id != quest_id]
+    # --------------------------
+    # Utilities
+    # --------------------------
+    def add_item(self, quest_id, item_name):
+        self.inventory.append(InventoryItem(quest_id, item_name))
