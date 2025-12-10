@@ -21,6 +21,36 @@ class PlayerState:
     xp: int = 0
     level: int = 1
 
+    # -----------------------------------------------------
+    # Inventory Helpers (needed for FETCH quests)
+    # -----------------------------------------------------
+    def has_item_for_quest(self, quest_id: str) -> bool:
+        """Return True if the player has collected the item for the given quest."""
+        return any(
+            item.quest_id == quest_id and item.collected
+            for item in self.inventory
+        )
+
+    def add_item(self, quest_id: str, item_name: str):
+        """Add an item to the player's quest inventory."""
+        self.inventory.append(
+            InventoryItem(
+                quest_id=quest_id,
+                item_name=item_name,
+                collected=True
+            )
+        )
+
+    def consume_item_for_quest(self, quest_id: str):
+        """Remove the quest item from inventory after turn-in."""
+        self.inventory = [
+            item for item in self.inventory
+            if not (item.quest_id == quest_id and item.collected)
+        ]
+
+    # -----------------------------------------------------
+    # Serialization → JSON
+    # -----------------------------------------------------
     def to_dict(self):
         """Convert PlayerState to JSON-compatible dict."""
         return {
@@ -40,6 +70,9 @@ class PlayerState:
             "level": self.level,
         }
 
+    # -----------------------------------------------------
+    # Load from JSON
+    # -----------------------------------------------------
     @staticmethod
     def from_dict(data: dict):
         ps = PlayerState(

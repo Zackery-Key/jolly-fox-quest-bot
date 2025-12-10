@@ -94,7 +94,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
 
 # Commands
-@bot.tree.command(name="quest_admin_reset_user", description="Admin: clear a user's quest data so they can get a new daily quest.")
+@bot.tree.command(name="quest_admin_reset_user", description="Admin: Reset a user's quest profile completely.")
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
     member: discord.Member
@@ -102,38 +102,29 @@ async def quest_admin_reset_user(
     # Permission check
     if not interaction.user.guild_permissions.manage_guild:
         await interaction.response.send_message(
-            "❌ You do not have permission to use this command.",
+            "❌ You do not have permission to use this.",
             ephemeral=True
         )
         return
 
-    ok = quest_manager.clear_player(member.id)
+    user_id = member.id
 
-    if ok:
+    # Check if the player exists
+    if user_id not in quest_manager.players:
         await interaction.response.send_message(
-            f"🧹 Cleared quest data for **{member.display_name}**. "
-            f"They can now run `/quest_today` to get a new daily quest.",
+            f"ℹ️ {member.display_name} has no guild profile to reset.",
             ephemeral=True
         )
-    else:
-        await interaction.response.send_message(
-            f"ℹ️ No quest data was found for **{member.display_name}**.",
-            ephemeral=True
-        )
+        return
 
-    user_id = interaction.user.id
-    if user_id in quest_manager.players:
-        del quest_manager.players[user_id]
-        quest_manager.save_players()
-        await interaction.response.send_message(
-            "🧹 Your player data was cleared. Run `/quest_today` again.",
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message(
-            "No player record found to clear.",
-            ephemeral=True
-        )
+    # Delete the player profile
+    del quest_manager.players[user_id]
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🧹 Profile reset for **{member.display_name}** "
+        f"(ID: {user_id}). They can start fresh with `/quest_today`."
+    )
 
 
 @bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.")
