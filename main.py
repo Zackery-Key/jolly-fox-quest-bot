@@ -76,19 +76,14 @@ async def quest_today(interaction: discord.Interaction):
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    guild = bot.get_guild(GUILD_ID)
-    if guild is None:
-        print(f"ERROR: Bot is not in the guild with ID {GUILD_ID}")
-        return
+    guild_obj = discord.Object(id=GUILD_ID)
 
     try:
-        # Clear existing guild commands to force Discord refresh
-        await bot.tree.clear_commands(guild=guild)
+        await bot.tree.clear_commands(guild=guild_obj)
         print("Cleared old guild commands.")
 
-        # Sync new commands
-        cmds = await bot.tree.sync(guild=guild)
-        print(f"Synced {len(cmds)} commands to guild: {guild.name} ({guild.id})")
+        cmds = await bot.tree.sync(guild=guild_obj)
+        print(f"Synced {len(cmds)} commands to guild: {GUILD_ID}")
 
     except Exception as e:
         print("Error syncing commands:", e)
