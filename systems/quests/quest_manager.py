@@ -156,7 +156,7 @@ class QuestManager:
     # -----------------------------------------------------
     def complete_daily(self, user_id: int):
         """Marks daily quest as completed and awards XP & stats."""
-        player = self.get_player(user_id)
+        player = self.get_or_create_player(user_id)
 
         # Already completed? Don't double-award.
         if player.daily_quest.get("completed"):

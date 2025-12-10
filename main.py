@@ -39,11 +39,14 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
     Returns (player, template) or (None, None) if it handled the error.
     """
     user_id = interaction.user.id
+
+    # Create profile only when appropriate
     if create_if_missing:
         player = quest_manager.get_or_create_player(user_id)
     else:
         player = quest_manager.get_player(user_id)
 
+    # No profile exists AND we are not allowed to create one
     if not player:
         await interaction.response.send_message(
             "You do not have a guild profile yet. Use `/quest_today` to begin.",
@@ -51,10 +54,18 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
         )
         return None, None
 
-    # No quest at all
+    # No daily quest assigned
     if not player.daily_quest:
         await interaction.response.send_message(
             "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True
+        )
+        return None, None
+
+    # Corrupted data guard
+    if "quest_id" not in player.daily_quest:
+        await interaction.response.send_message(
+            "⚠️ Your daily quest data is incomplete. Use `/quest_today` to refresh.",
             ephemeral=True
         )
         return None, None
@@ -73,7 +84,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
     # Template missing (data issue)
     if template is None:
         await interaction.response.send_message(
-            "⚠️ Error: your quest template could not be found. Please tell an admin.",
+            "⚠️ Error: Your quest template could not be found. Please tell an admin.",
             ephemeral=True
         )
         return None, None
@@ -81,15 +92,13 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
     # Type mismatch
     if expected_type is not None and template.type != expected_type:
         await interaction.response.send_message(
-            f"❌ Your current quest is not a `{expected_type.value}` quest. "
+            f"❌ Your current quest is `{template.type.value}`, not `{expected_type.value}`.\n"
             f"Use the correct command for your quest type.",
             ephemeral=True
         )
         return None, None
 
     return player, template
-
-
 
 
 
@@ -213,7 +222,7 @@ async def quest_today(interaction: discord.Interaction):
         if template.dc:
             hint_lines.append(f"• Target DC: **{template.dc}**")
 
-       # --- TRAVEL ---
+    # --- TRAVEL ---
     elif template.type == QuestType.TRAVEL:
         if not template.required_channel_id:
             hint_lines.append(
