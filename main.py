@@ -87,15 +87,6 @@ async def _ensure_active_daily(
 
 
 # Commands
-@bot.tree.command(name="qtest", description="Test QuestManager connection.")
-async def qtest(interaction: discord.Interaction):
-    p = quest_manager.get_player(interaction.user.id)
-    await interaction.response.send_message(
-        f"QTEST OK — Player loaded. Daily quest: {p.daily_quest}",
-        ephemeral=True
-    )
-
-
 @bot.tree.command(name="quest_admin_reset_user", description="Admin: clear a user's quest data so they can get a new daily quest.")
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
@@ -211,7 +202,7 @@ async def quest_today(interaction: discord.Interaction):
 
     msg = header + "\n" + body + hint_text + footer
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg)
 
 
 @bot.tree.command(name="quest_npc", description="Speak with the required NPC to complete your quest.")
@@ -253,8 +244,7 @@ async def quest_npc(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"**{npc.name}** says:\n> {reply_text}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
-        ephemeral=True
+        f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
 
@@ -300,7 +290,7 @@ async def quest_skill(interaction: discord.Interaction):
     else:
         msg += "\n\nYou didn't earn any points this time, but the effort still counts for your daily quest."
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg)
 
 @bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def quest_checkin(interaction: discord.Interaction):
@@ -326,8 +316,7 @@ async def quest_checkin(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"🚶 You check in at your destination.\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
-        ephemeral=True
+        f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
 @bot.tree.command(name="quest_fetch", description="Collect the required item for a FETCH quest.")
@@ -371,8 +360,7 @@ async def quest_fetch(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"📦 You gather **{item_name}**.\n\n"
-        f"Now take it to {turnin_hint} to complete your quest.",
-        ephemeral=True
+        f"Now take it to {turnin_hint} to complete your quest."
     )
 
 @bot.tree.command(name="quest_turnin", description="Turn in the collected item for your FETCH quest.")
@@ -415,8 +403,7 @@ async def quest_turnin(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"📬 You turn in **{item_name}** to the guild.\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
-        ephemeral=True
+        f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
 

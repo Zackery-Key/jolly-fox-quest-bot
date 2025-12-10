@@ -5,7 +5,7 @@
         "type": "SOCIAL",
         "points": 5,
         "npc_id": "celara",
-        "required_channel_id": 1448375891444109395,
+        "required_channel_id": 1446529487868002415,
         "summary": "Check in with Celara at the tavern.",
         "details": "Celara wants an update from your adventures. Speak with her to complete this quest.",
         "tags": ["social", "npc"]
@@ -18,7 +18,7 @@
         "dc": 12,
         "points_on_success": 6,
         "points_on_fail": 2,
-        "required_channel_id": null,
+        "required_channel_id": 1447967417665060985,
         "summary": "Test your skills against the guild's training dummy.",
         "details": "Roll a d20 to see how well you perform in training.",
         "tags": ["skill", "training"]
@@ -28,7 +28,7 @@
         "name": "Visit the Tavern",
         "type": "TRAVEL",
         "points": 4,
-        "required_channel_id": 1448375891444109395,
+        "required_channel_id": 1446529487868002415,
         "summary": "Drop by the Tavern and check in.",
         "details": "The guild wants to see members active in the hall. Visit the Tavern and check in.",
         "tags": ["travel", "social"]
@@ -39,7 +39,7 @@
         "type": "FETCH",
         "points": 5,
         "item_name": "Bundle of Rumors",
-        "source_channel_id": 1448375891444109395,
+        "source_channel_id": 1446529487868002415,
         "turnin_channel_id": 0,
         "summary": "Pick up rumors in the tavern and turn them in at the quest board.",
         "details": "Spend some time listening to chatter in the tavern, then report what you’ve gathered to the guild quest board.",
