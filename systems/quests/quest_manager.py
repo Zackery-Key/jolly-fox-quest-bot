@@ -91,12 +91,17 @@ class QuestManager:
     def get_npc(self, npc_id):
         return self.npcs.get(npc_id)
 
-    def get_player(self, user_id):
+    def get_player(self, user_id: int):
+        """Return player state or None if player does not exist."""
+        return self.players.get(user_id)
+
+    def get_or_create_player(self, user_id: int):
+        """Only create a profile when actually needed."""
         if user_id not in self.players:
-            # Create new PlayerState
             self.players[user_id] = PlayerState(user_id=user_id)
             self.save_players()
         return self.players[user_id]
+
 
     # -----------------------------------------------------
     # Player management helpers
@@ -144,12 +149,32 @@ class QuestManager:
     # -----------------------------------------------------
     # Completing quests
     # -----------------------------------------------------
-    def complete_daily(self, user_id):
+    def complete_daily(self, user_id: int):
+        """Marks daily quest as completed and awards XP & stats."""
         player = self.get_player(user_id)
 
-        if not player.daily_quest:
-            return False  # No quest active
+        # Already completed? Don't double-award.
+        if player.daily_quest.get("completed"):
+            return
 
+        # Mark quest complete
         player.daily_quest["completed"] = True
+
+        # --- NEW: Stats tracking ---
+        player.lifetime_completed += 1
+        player.season_completed += 1
+
+        # --- NEW: XP award ---
+        # You can tweak this! For now every quest gives +5 XP.
+        xp_gain = 5
+        player.xp += xp_gain
+
+        # Level-up logic
+        while player.xp >= player.level * 20:
+            player.xp -= player.level * 20
+            player.level += 1
+
+        # Save after changes
         self.save_players()
+
         return True

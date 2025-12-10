@@ -30,10 +30,7 @@ async def setup_hook():
     print(f"Setup complete for guild {GUILD_ID}")
 
 # Helpers
-async def _ensure_active_daily(
-    interaction: discord.Interaction,
-    expected_type: QuestType | None = None,
-):
+async def _ensure_active_daily(interaction, expected_type=None, create_if_missing=True):
     """
     Shared guard for daily quest commands.
     - Ensures the user has a daily quest.
@@ -42,7 +39,17 @@ async def _ensure_active_daily(
     Returns (player, template) or (None, None) if it handled the error.
     """
     user_id = interaction.user.id
-    player = quest_manager.get_player(user_id)
+    if create_if_missing:
+        player = quest_manager.get_or_create_player(user_id)
+    else:
+        player = quest_manager.get_player(user_id)
+
+    if not player:
+        await interaction.response.send_message(
+            "You do not have a guild profile yet. Use `/quest_today` to begin.",
+            ephemeral=True
+        )
+        return None, None
 
     # No quest at all
     if not player.daily_quest:
@@ -129,15 +136,40 @@ async def quest_admin_reset_user(
         )
 
 
+@bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.")
+async def quest_admin_cleanup(interaction: discord.Interaction):
+
+    # Permission check
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message(
+            "❌ You do not have permission to use this.",
+            ephemeral=True
+        )
+        return
+
+    guild = interaction.guild
+    valid_ids = {member.id for member in guild.members}
+
+    removed = 0
+
+    for uid in list(quest_manager.players.keys()):
+        if uid not in valid_ids:
+            del quest_manager.players[uid]
+            removed += 1
+
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🧹 Cleaned up **{removed}** profiles no longer in the server."
+    )
+
+
 @bot.tree.command(name="ping", description="Test that the bot is alive.")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
 
-@bot.tree.command(
-    name="quest_today",
-    description="See your daily Jolly Fox guild quest."
-)
+@bot.tree.command(name="quest_today", description="See your daily Jolly Fox guild quest.")
 async def quest_today(interaction: discord.Interaction):
     user_id = interaction.user.id
 
@@ -446,6 +478,87 @@ async def quest_turnin(interaction: discord.Interaction):
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
+@bot.tree.command(name="quest_profile", description="View your Jolly Fox Guild badge and quest history.")
+async def quest_profile(interaction: discord.Interaction):
+    user = interaction.user
+    player = quest_manager.get_player(interaction.user.id)
+
+    if not player:
+        await interaction.response.send_message(
+            f"**🦊 Guild Badge — {interaction.user.display_name}**\n"
+            "No profile found.\n"
+            "Use `/quest_today` to begin your guild journey.",
+            ephemeral=False
+        )
+        return
+
+    daily = player.daily_quest or {}
+
+    lines = []
+    lines.append(f"**🛡️ Jolly Fox Guild Badge — {user.display_name}**\n")
+
+    # -----------------------------
+    # LEVEL + XP
+    # -----------------------------
+    xp_needed = player.level * 20
+    lines.append(f"**Level:** {player.level}")
+    lines.append(f"**XP:** {player.xp}/{xp_needed}")
+
+    # Optional XP bar
+    bar_fill = int((player.xp / xp_needed) * 10)
+    bar = "█" * bar_fill + "░" * (10 - bar_fill)
+    lines.append(f"**Progress:** `{bar}`")
+
+    lines.append("")
+
+    # -----------------------------
+    # QUEST HISTORY STATS
+    # -----------------------------
+    lines.append("**Quest History:**")
+    lines.append(f"• Lifetime Quests Completed: **{player.lifetime_completed}**")
+    lines.append(f"• Seasonal Quests Completed: **{player.season_completed}**")
+    lines.append("")
+
+    # -----------------------------
+    # DAILY QUEST INFO
+    # -----------------------------
+    if not daily:
+        lines.append("**Daily Quest:** None assigned yet.")
+        lines.append("Use `/quest_today` to receive today’s quest.\n")
+    else:
+        quest_id = daily.get("quest_id")
+        template = quest_manager.get_template(quest_id)
+        completed = daily.get("completed", False)
+        status_icon = "✅" if completed else "🟠"
+
+        if template:
+            lines.append(f"**Daily Quest:** {status_icon} {template.name}")
+            lines.append(f"• Type: `{template.type}`")
+            lines.append(f"• Summary: {template.summary}")
+        else:
+            lines.append(f"**Daily Quest:** Template missing for `{quest_id}`")
+
+        lines.append("")
+
+    # -----------------------------
+    # INVENTORY
+    # -----------------------------
+    if player.inventory:
+        lines.append("**Inventory (quest items):**")
+        for item in player.inventory:
+            lines.append(f"• `{item.quest_id}` — {item.item_name}")
+    else:
+        lines.append("**Inventory:** Empty")
+
+    lines.append("")
+
+    # -----------------------------
+    # GLOBAL QUEST BOARD STATUS
+    # -----------------------------
+    board_points = quest_manager.quest_board.global_points
+    lines.append(f"**Guild Quest Board (season):** {board_points} points")
+
+    await interaction.response.send_message("\n".join(lines))
 
 
 # Sync
@@ -456,6 +569,11 @@ async def on_ready():
     print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
     print(f"Logged in as {bot.user}")
 
+@bot.event
+async def on_member_remove(member: discord.Member):
+    user_id = member.id
+    if quest_manager.clear_player(user_id):
+        print(f"[CLEANUP] Removed player data for {member.display_name} ({user_id})")
 
 # Run
 bot.run(TOKEN)
