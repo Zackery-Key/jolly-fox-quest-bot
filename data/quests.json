@@ -40,7 +40,7 @@
         "points": 5,
         "item_name": "Bundle of Rumors",
         "source_channel_id": 1446529487868002415,
-        "turnin_channel_id": 0,
+        "turnin_channel_id": 1446511086747779195,
         "summary": "Pick up rumors in the tavern and turn them in at the quest board.",
         "details": "Spend some time listening to chatter in the tavern, then report what you’ve gathered to the guild quest board.",
         "tags": ["fetch", "social"]

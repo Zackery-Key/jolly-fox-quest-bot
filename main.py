@@ -134,7 +134,10 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
 
-@bot.tree.command(name="quest_today", description="See your daily Jolly Fox guild quest.")
+@bot.tree.command(
+    name="quest_today",
+    description="See your daily Jolly Fox guild quest."
+)
 async def quest_today(interaction: discord.Interaction):
     user_id = interaction.user.id
 
@@ -152,19 +155,20 @@ async def quest_today(interaction: discord.Interaction):
 
     completed = bool(player.daily_quest.get("completed"))
 
-    # Title + status
+    # Status + header
     status_label = "✅ COMPLETED" if completed else "🟠 ACTIVE"
+    qtype_str = template.type.value if hasattr(template.type, "value") else str(template.type)
+
     header = f"**🦊 Your Daily Quest — {status_label}**\n"
     body = (
         f"**Name:** {template.name}\n"
-        f"**Type:** `{template.type.value if hasattr(template.type, 'value') else template.type}`\n\n"
+        f"**Type:** `{qtype_str}`\n\n"
         f"**Summary:** {template.summary}\n"
     )
 
-    # Type-specific hint
-    hint_lines = []
+    hint_lines: list[str] = []
 
-    # SOCIAL
+    # --- SOCIAL ---
     if template.type == QuestType.SOCIAL:
         if template.required_channel_id:
             hint_lines.append(
@@ -175,7 +179,7 @@ async def quest_today(interaction: discord.Interaction):
         if template.npc_id:
             hint_lines.append(f"• Required NPC: `{template.npc_id}`")
 
-    # SKILL
+    # --- SKILL ---
     elif template.type == QuestType.SKILL:
         if template.required_channel_id:
             hint_lines.append(
@@ -186,13 +190,49 @@ async def quest_today(interaction: discord.Interaction):
         if template.dc:
             hint_lines.append(f"• Target DC: **{template.dc}**")
 
-    # Other types (TRAVEL, FETCH, etc.) can be fleshed out later
+       # --- TRAVEL ---
+    elif template.type == QuestType.TRAVEL:
+        if not template.required_channel_id:
+            hint_lines.append(
+                "⚠️ This TRAVEL quest is misconfigured (no required_channel_id). "
+                "Please tell an admin."
+            )
+        else:
+            hint_lines.append(
+                f"• Go to <#{template.required_channel_id}> and use `/quest_checkin`."
+            )
+
+    # --- FETCH ---
+    elif template.type == QuestType.FETCH:
+        src = template.source_channel_id
+        turnin = template.turnin_channel_id
+
+        if not src or not turnin:
+            hint_lines.append(
+                "⚠️ This FETCH quest is misconfigured (missing source/turn-in channel). "
+                "Please tell an admin."
+            )
+        else:
+            hint_lines.append(
+                f"• First, go to <#{src}> and use `/quest_fetch` to gather the item."
+            )
+            hint_lines.append(
+                f"• Then, go to <#{turnin}> and use `/quest_turnin` to complete the quest."
+            )
+
+        if template.item_name:
+            hint_lines.append(f"• Required item: **{template.item_name}**")
+
+    # --- Fallback for unknown types ---
     else:
         hint_lines.append("• Use the appropriate quest command for this type.")
 
     # Completed vs not completed footer
     if completed:
-        footer = "\n\n✨ You’ve already completed this quest for today. Come back tomorrow for a new one, or ask an admin to reset your quest if you’re testing."
+        footer = (
+            "\n\n✨ You’ve already completed this quest for today. "
+            "Come back tomorrow for a new one, or ask an admin to reset your quest if you're testing."
+        )
     else:
         footer = "\n\n✨ Complete this quest to earn guild points for today."
 
