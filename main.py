@@ -6,6 +6,8 @@ from systems.quests.quest_manager import QuestManager
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")  # Jolly Fox server ID from Railway
 quest_manager = QuestManager()
+print("QUEST MANAGER INITIALIZED")
+
 
 if GUILD_ID is None:
     raise ValueError("GUILD_ID environment variable is not set!")
