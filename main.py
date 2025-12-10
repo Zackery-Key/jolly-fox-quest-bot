@@ -83,6 +83,9 @@ async def _ensure_active_daily(
     return player, template
 
 
+
+
+
 # Commands
 @bot.tree.command(name="qtest", description="Test QuestManager connection.")
 async def qtest(interaction: discord.Interaction):
@@ -143,26 +146,70 @@ async def ping(interaction: discord.Interaction):
 @bot.tree.command(name="quest_today", description="See your daily Jolly Fox guild quest.")
 async def quest_today(interaction: discord.Interaction):
     user_id = interaction.user.id
-    
-    # Assign or fetch today's quest
+
+    # Make sure you have today's quest (won't change if already assigned today)
     quest_id = quest_manager.assign_daily(user_id)
     template = quest_manager.get_template(quest_id)
+    player = quest_manager.get_player(user_id)
 
     if template is None:
         await interaction.response.send_message(
-            "⚠️ Error loading your quest. No templates found.",
+            "⚠️ Error loading your quest. No templates found or quest is invalid.",
             ephemeral=True
         )
         return
 
-    # Build message text
-    msg = (
-        f"**🦊 Your Daily Quest:** `{template.name}`\n\n"
-        f"**Summary:** {template.summary}\n\n"
-        f"**Type:** `{template.type}`\n"
-        f"Use the appropriate command to complete it.\n\n"
-        f"Quest ID: `{template.quest_id}`"
+    completed = bool(player.daily_quest.get("completed"))
+
+    # Title + status
+    status_label = "✅ COMPLETED" if completed else "🟠 ACTIVE"
+    header = f"**🦊 Your Daily Quest — {status_label}**\n"
+    body = (
+        f"**Name:** {template.name}\n"
+        f"**Type:** `{template.type.value if hasattr(template.type, 'value') else template.type}`\n\n"
+        f"**Summary:** {template.summary}\n"
     )
+
+    # Type-specific hint
+    hint_lines = []
+
+    # SOCIAL
+    if template.type == QuestType.SOCIAL:
+        if template.required_channel_id:
+            hint_lines.append(
+                f"• Go to <#{template.required_channel_id}> and use `/quest_npc`."
+            )
+        else:
+            hint_lines.append("• Use `/quest_npc` in the appropriate RP channel.")
+        if template.npc_id:
+            hint_lines.append(f"• Required NPC: `{template.npc_id}`")
+
+    # SKILL
+    elif template.type == QuestType.SKILL:
+        if template.required_channel_id:
+            hint_lines.append(
+                f"• Go to <#{template.required_channel_id}> and use `/quest_skill`."
+            )
+        else:
+            hint_lines.append("• Use `/quest_skill` to attempt your training roll.")
+        if template.dc:
+            hint_lines.append(f"• Target DC: **{template.dc}**")
+
+    # Other types (TRAVEL, FETCH, etc.) can be fleshed out later
+    else:
+        hint_lines.append("• Use the appropriate quest command for this type.")
+
+    # Completed vs not completed footer
+    if completed:
+        footer = "\n\n✨ You’ve already completed this quest for today. Come back tomorrow for a new one, or ask an admin to reset your quest if you’re testing."
+    else:
+        footer = "\n\n✨ Complete this quest to earn guild points for today."
+
+    hint_text = ""
+    if hint_lines:
+        hint_text = "\n\n**How to complete it:**\n" + "\n".join(hint_lines)
+
+    msg = header + "\n" + body + hint_text + footer
 
     await interaction.response.send_message(msg, ephemeral=True)
 
@@ -254,6 +301,124 @@ async def quest_skill(interaction: discord.Interaction):
         msg += "\n\nYou didn't earn any points this time, but the effort still counts for your daily quest."
 
     await interaction.response.send_message(msg, ephemeral=True)
+
+@bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
+async def quest_checkin(interaction: discord.Interaction):
+    # Has quest, not completed, correct type = TRAVEL
+    player, template = await _ensure_active_daily(
+        interaction,
+        expected_type=QuestType.TRAVEL
+    )
+    if player is None:
+        return
+
+    required_channel = template.required_channel_id or 0
+    if required_channel and interaction.channel_id != required_channel:
+        await interaction.response.send_message(
+            f"❌ You must check in at <#{required_channel}> for this quest.",
+            ephemeral=True
+        )
+        return
+
+    quest_manager.complete_daily(interaction.user.id)
+    quest_manager.quest_board.add_points(template.points)
+    quest_manager.save_board()
+
+    await interaction.response.send_message(
+        f"🚶 You check in at your destination.\n\n"
+        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="quest_fetch", description="Collect the required item for a FETCH quest.")
+async def quest_fetch(interaction: discord.Interaction):
+    # Has quest, not completed, correct type = FETCH
+    player, template = await _ensure_active_daily(
+        interaction,
+        expected_type=QuestType.FETCH
+    )
+    if player is None:
+        return
+
+    source_channel = template.source_channel_id or 0
+    if source_channel and interaction.channel_id != source_channel:
+        await interaction.response.send_message(
+            f"❌ You can only gather this in <#{source_channel}>.",
+            ephemeral=True
+        )
+        return
+
+    quest_id = player.daily_quest.get("quest_id")
+
+    if player.has_item_for_quest(quest_id):
+        await interaction.response.send_message(
+            "📦 You've already gathered this quest item. "
+            "Head to the quest board and use `/quest_turnin`.",
+            ephemeral=True
+        )
+        return
+
+    item_name = template.item_name or "Quest Item"
+    player.add_item(quest_id, item_name)
+    quest_manager.save_players()
+
+    turnin_channel = template.turnin_channel_id or 0
+    turnin_hint = (
+        f"<#{turnin_channel}> with `/quest_turnin`"
+        if turnin_channel
+        else "`/quest_turnin` in the quest board channel"
+    )
+
+    await interaction.response.send_message(
+        f"📦 You gather **{item_name}**.\n\n"
+        f"Now take it to {turnin_hint} to complete your quest.",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="quest_turnin", description="Turn in the collected item for your FETCH quest.")
+async def quest_turnin(interaction: discord.Interaction):
+    # Has quest, not completed, correct type = FETCH
+    player, template = await _ensure_active_daily(
+        interaction,
+        expected_type=QuestType.FETCH
+    )
+    if player is None:
+        return
+
+    turnin_channel = template.turnin_channel_id or 0
+    if turnin_channel and interaction.channel_id != turnin_channel:
+        await interaction.response.send_message(
+            f"❌ You must turn this in at <#{turnin_channel}>.",
+            ephemeral=True
+        )
+        return
+
+    quest_id = player.daily_quest.get("quest_id")
+
+    if not player.has_item_for_quest(quest_id):
+        await interaction.response.send_message(
+            "❌ You don't have the required quest item yet. "
+            "Use `/quest_fetch` in the correct channel first.",
+            ephemeral=True
+        )
+        return
+
+    # Consume the item and complete the quest
+    player.consume_item_for_quest(quest_id)
+    quest_manager.save_players()
+
+    quest_manager.complete_daily(interaction.user.id)
+    quest_manager.quest_board.add_points(template.points)
+    quest_manager.save_board()
+
+    item_name = template.item_name or "Quest Item"
+
+    await interaction.response.send_message(
+        f"📬 You turn in **{item_name}** to the guild.\n\n"
+        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        ephemeral=True
+    )
+
 
 
 # Sync
