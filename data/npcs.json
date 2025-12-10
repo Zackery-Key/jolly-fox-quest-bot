@@ -1,8 +1,15 @@
-[
-    {
-        "npc_id": "celara",
-        "name": "Celara Windwhisper",
-        "avatar_url": "",
-        "default_reply": "Ah, greetings traveler. What news do you bring?"
-    }
-]
+{
+  "celara": {
+    "npc_id": "celara",
+    "name": "Celara",
+    "avatar_url": "https://example.com/celara.png",
+    "dialogue": "Greetings, traveler!"
+  },
+
+  "orlin": {
+    "npc_id": "orlin",
+    "name": "Orlin",
+    "avatar_url": "https://example.com/orlin.png",
+    "dialogue": "Knowledge awaits."
+  }
+}
