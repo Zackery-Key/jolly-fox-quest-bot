@@ -1,6 +1,9 @@
 import os
 import discord
 from discord.ext import commands
+import random
+from systems.quests.quest_models import QuestType
+
 
 # Quest Manager
 from systems.quests.quest_manager import QuestManager
@@ -88,7 +91,7 @@ async def quest_npc(interaction: discord.Interaction):
     template = quest_manager.get_template(quest_id)
 
     # Not a SOCIAL quest
-    if template.type != "SOCIAL":
+    if template.type != QuestType.SOCIAL:
         await interaction.response.send_message(
             "❌ This is not a SOCIAL quest. Use the correct command for this quest type.",
             ephemeral=True
@@ -128,6 +131,68 @@ async def quest_npc(interaction: discord.Interaction):
         f"✨ **Quest complete!** You earned **{template.points}** guild points.",
         ephemeral=True
     )
+
+@bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
+async def quest_skill(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    player = quest_manager.get_player(user_id)
+
+    if not player.daily_quest:
+        await interaction.response.send_message(
+            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True
+        )
+        return
+
+    if player.daily_quest.get("completed"):
+        await interaction.response.send_message(
+            "✅ You've already completed today's quest.",
+            ephemeral=True
+        )
+        return
+
+    quest_id = player.daily_quest.get("quest_id")
+    template = quest_manager.get_template(quest_id)
+
+    if template.type != QuestType.SKILL:
+        await interaction.response.send_message(
+            "❌ Your current quest is not a SKILL quest. Use the correct command for your quest type.",
+            ephemeral=True
+        )
+        return
+
+    required_channel = template.required_channel_id
+    if required_channel and interaction.channel_id != required_channel:
+        await interaction.response.send_message(
+            f"❌ You must attempt this training in <#{required_channel}>.",
+            ephemeral=True
+        )
+        return
+
+    dc = template.dc or 10
+    roll = random.randint(1, 20)
+    success = roll >= dc
+
+    if success:
+        gained = template.points_on_success or template.points or 0
+        result_text = f"🎯 You rolled **{roll}** (DC {dc}) — **Success!**"
+    else:
+        gained = template.points_on_fail or 0
+        result_text = f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
+
+    quest_manager.complete_daily(user_id)
+
+    if gained > 0:
+        quest_manager.quest_board.add_points(gained)
+        quest_manager.save_board()
+
+    msg = result_text
+    if gained > 0:
+        msg += f"\n\n✨ You earned **{gained}** guild points."
+    else:
+        msg += "\n\nYou didn't earn any points this time, but the effort still counts for your daily quest."
+
+    await interaction.response.send_message(msg, ephemeral=True)
 
 
 # Sync
