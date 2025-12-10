@@ -39,6 +39,21 @@ async def qtest(interaction: discord.Interaction):
         ephemeral=True
     )
 
+@bot.tree.command(name="quest_debug_clear", description="(DEV ONLY) Clears your daily quest for testing.")
+async def quest_debug_clear(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    if user_id in quest_manager.players:
+        del quest_manager.players[user_id]
+        quest_manager.save_players()
+        await interaction.response.send_message(
+            "🧹 Your player data was cleared. Run `/quest_today` again.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            "No player record found to clear.",
+            ephemeral=True
+        )
 
 @bot.tree.command(name="ping", description="Test that the bot is alive.")
 async def ping(interaction: discord.Interaction):
