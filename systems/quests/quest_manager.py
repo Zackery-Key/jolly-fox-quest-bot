@@ -1,236 +1,139 @@
+import os
 import json
-from pathlib import Path
-from typing import Dict, Optional
+from datetime import date
 
-from .quest_models import QuestTemplate, QuestType
+from .quest_models import QuestTemplate
 from .npc_models import NPC
-from .player_state import PlayerState, InventoryItem
+from .player_state import PlayerState
 from .quest_board import QuestBoard
 
 
+DATA_DIR = "data"
+QUESTS_FILE = os.path.join(DATA_DIR, "quests.json")
+NPCS_FILE = os.path.join(DATA_DIR, "npcs.json")
+PLAYERS_FILE = os.path.join(DATA_DIR, "players.json")
+BOARD_FILE = os.path.join(DATA_DIR, "quest_board.json")
+
+
 class QuestManager:
-    """
-    Handles loading and saving all quest-related data:
-    - Quest templates
-    - NPCs
-    - Players
-    - Quest board
+    def __init__(self):
+        # Ensure data directory + files exist
+        self._ensure_file(QUESTS_FILE, default=[])
+        self._ensure_file(NPCS_FILE, default=[])
+        self._ensure_file(PLAYERS_FILE, default={})
+        self._ensure_file(BOARD_FILE, default={"global_points": 0})
 
-    This is the main backend system used by discord commands.
-    """
+        # Load everything
+        self.quest_templates = self._load_quest_templates()
+        self.npcs = self._load_npcs()
+        self.players = self._load_players()
+        self.quest_board = self._load_board()
 
-    def __init__(self, data_dir: str = "data"):
-        self.data_path = Path(data_dir)
-        self.data_path.mkdir(exist_ok=True)
+    # -----------------------------------------------------
+    # Ensure files exist
+    # -----------------------------------------------------
+    def _ensure_file(self, path, default):
+        """Creates the file with default content if missing."""
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
 
-        # File paths
-        self.quest_templates_file = self.data_path / "quest_templates.json"
-        self.npcs_file = self.data_path / "npcs.json"
-        self.players_file = self.data_path / "players.json"
-        self.quest_board_file = self.data_path / "quest_board.json"
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                json.dump(default, f, indent=4)
 
-        # Loaded objects
-        self.quest_templates: Dict[str, QuestTemplate] = {}
-        self.npcs: Dict[str, NPC] = {}
-        self.players: Dict[str, PlayerState] = {}
-        self.quest_board: QuestBoard = QuestBoard()
-
-        # Load data into memory
-        self._load_all()
-
-    # ----------------------------------------------------
-    # -------------------- LOADING ------------------------
-    # ----------------------------------------------------
-
-    def _load_all(self):
-        self._load_quest_templates()
-        self._load_npcs()
-        self._load_players()
-        self._load_quest_board()
-
+    # -----------------------------------------------------
+    # Loaders
+    # -----------------------------------------------------
     def _load_quest_templates(self):
-        if not self.quest_templates_file.exists():
-            return
-
-        with open(self.quest_templates_file, "r", encoding="utf8") as f:
+        with open(QUESTS_FILE, "r") as f:
             raw = json.load(f)
-
-        for qid, data in raw.items():
-            self.quest_templates[qid] = QuestTemplate(
-                quest_id=qid,
-                name=data["name"],
-                type=QuestType(data["type"]),
-                points=data["points"],
-                required_channel_id=data.get("required_channel_id"),
-                source_channel_id=data.get("source_channel_id"),
-                turnin_channel_id=data.get("turnin_channel_id"),
-                dc=data.get("dc"),
-                points_on_success=data.get("points_on_success"),
-                points_on_fail=data.get("points_on_fail"),
-                npc_id=data.get("npc_id"),
-                item_name=data.get("item_name"),
-                summary=data.get("summary", ""),
-                details=data.get("details", ""),
-                tags=data.get("tags", []),
-            )
+        return {q["quest_id"]: QuestTemplate(**q) for q in raw}
 
     def _load_npcs(self):
-        if not self.npcs_file.exists():
-            return
-
-        with open(self.npcs_file, "r", encoding="utf8") as f:
+        with open(NPCS_FILE, "r") as f:
             raw = json.load(f)
-
-        for npc_id, data in raw.items():
-            self.npcs[npc_id] = NPC(
-                npc_id=npc_id,
-                name=data["name"],
-                avatar_url=data["avatar_url"],
-                default_reply=data["default_reply"],
-            )
+        return {n["npc_id"]: NPC(**n) for n in raw}
 
     def _load_players(self):
-        if not self.players_file.exists():
-            return
-
-        with open(self.players_file, "r", encoding="utf8") as f:
+        with open(PLAYERS_FILE, "r") as f:
             raw = json.load(f)
 
-        for uid, data in raw.items():
-            p = PlayerState(user_id=uid)
+        players = {}
+        for user_id, pdata in raw.items():
+            players[int(user_id)] = PlayerState.from_dict(pdata)
 
-            # Load daily quest
-            p.daily_quest = data.get("daily_quest")
+        return players
 
-            # Load inventory
-            for item_data in data.get("inventory", []):
-                p.inventory.append(
-                    InventoryItem(
-                        quest_id=item_data["quest_id"],
-                        item_name=item_data["item_name"],
-                        collected=item_data.get("collected", True),
-                    )
-                )
-
-            self.players[uid] = p
-
-    def _load_quest_board(self):
-        if not self.quest_board_file.exists():
-            return
-
-        with open(self.quest_board_file, "r", encoding="utf8") as f:
+    def _load_board(self):
+        with open(BOARD_FILE, "r") as f:
             raw = json.load(f)
 
-        self.quest_board.season_id = raw.get("season_id", "default_season")
-        self.quest_board.global_points = raw.get("global_points", 0)
+        return QuestBoard(global_points=raw.get("global_points", 0))
 
-    # ----------------------------------------------------
-    # -------------------- SAVING -------------------------
-    # ----------------------------------------------------
-
-    def save_all(self):
-        self.save_quest_templates()
-        self.save_npcs()
-        self.save_players()
-        self.save_quest_board()
-
-    def save_quest_templates(self):
-        raw = {}
-        for qid, q in self.quest_templates.items():
-            raw[qid] = {
-                "name": q.name,
-                "type": q.type.value,
-                "points": q.points,
-                "required_channel_id": q.required_channel_id,
-                "source_channel_id": q.source_channel_id,
-                "turnin_channel_id": q.turnin_channel_id,
-                "dc": q.dc,
-                "points_on_success": q.points_on_success,
-                "points_on_fail": q.points_on_fail,
-                "npc_id": q.npc_id,
-                "item_name": q.item_name,
-                "summary": q.summary,
-                "details": q.details,
-                "tags": q.tags,
-            }
-
-        with open(self.quest_templates_file, "w", encoding="utf8") as f:
-            json.dump(raw, f, indent=2)
-
-    def save_npcs(self):
-        raw = {
-            npc_id: {
-                "name": npc.name,
-                "avatar_url": npc.avatar_url,
-                "default_reply": npc.default_reply,
-            }
-            for npc_id, npc in self.npcs.items()
-        }
-
-        with open(self.npcs_file, "w", encoding="utf8") as f:
-            json.dump(raw, f, indent=2)
-
+    # -----------------------------------------------------
+    # Saving
+    # -----------------------------------------------------
     def save_players(self):
-        raw = {}
+        out = {uid: p.to_dict() for uid, p in self.players.items()}
+        with open(PLAYERS_FILE, "w") as f:
+            json.dump(out, f, indent=4)
 
-        for uid, p in self.players.items():
-            raw[uid] = {
-                "daily_quest": p.daily_quest,
-                "inventory": [
-                    {
-                        "quest_id": item.quest_id,
-                        "item_name": item.item_name,
-                        "collected": item.collected,
-                    }
-                    for item in p.inventory
-                ],
-            }
+    def save_board(self):
+        with open(BOARD_FILE, "w") as f:
+            json.dump({"global_points": self.quest_board.global_points}, f, indent=4)
 
-        with open(self.players_file, "w", encoding="utf8") as f:
-            json.dump(raw, f, indent=2)
-
-    def save_quest_board(self):
-        raw = {
-            "season_id": self.quest_board.season_id,
-            "global_points": self.quest_board.global_points,
-        }
-
-        with open(self.quest_board_file, "w", encoding="utf8") as f:
-            json.dump(raw, f, indent=2)
-
-    # ----------------------------------------------------
-    # -------------------- HELPERS ------------------------
-    # ----------------------------------------------------
-
-    def get_template(self, quest_id: str) -> Optional[QuestTemplate]:
+    # -----------------------------------------------------
+    # Accessors
+    # -----------------------------------------------------
+    def get_template(self, quest_id):
         return self.quest_templates.get(quest_id)
 
-    def add_template(self, template: QuestTemplate):
-        self.quest_templates[template.quest_id] = template
-        self.save_quest_templates()
-
-    def get_npc(self, npc_id: str) -> Optional[NPC]:
+    def get_npc(self, npc_id):
         return self.npcs.get(npc_id)
 
-    def add_npc(self, npc: NPC):
-        self.npcs[npc.npc_id] = npc
-        self.save_npcs()
-
-    def get_player(self, user_id: int) -> PlayerState:
-        uid = str(user_id)
-
-        if uid not in self.players:
-            self.players[uid] = PlayerState(user_id)
+    def get_player(self, user_id):
+        if user_id not in self.players:
+            # Create new PlayerState
+            self.players[user_id] = PlayerState(user_id=user_id)
             self.save_players()
+        return self.players[user_id]
 
-        return self.players[uid]
+    # -----------------------------------------------------
+    # Daily Quest Assignment
+    # -----------------------------------------------------
+    def assign_daily(self, user_id):
+        """Assigns a daily quest if the user has none or it's a new day."""
+        player = self.get_player(user_id)
 
-    def assign_daily(self, user_id: int, quest_id: str):
-        p = self.get_player(user_id)
-        p.assign_daily_quest(quest_id)
+        today = str(date.today())
+
+        # If already has today's quest, do nothing
+        if (player.daily_quest 
+            and player.daily_quest.get("assigned_date") == today):
+            return player.daily_quest["quest_id"]
+
+        # Otherwise assign a random quest
+        import random
+        quest_id = random.choice(list(self.quest_templates.keys()))
+
+        player.daily_quest = {
+            "quest_id": quest_id,
+            "assigned_date": today,
+            "completed": False
+        }
+
         self.save_players()
+        return quest_id
 
-    def complete_daily(self, user_id: int):
-        p = self.get_player(user_id)
-        p.complete_daily_quest()
+    # -----------------------------------------------------
+    # Completing quests
+    # -----------------------------------------------------
+    def complete_daily(self, user_id):
+        player = self.get_player(user_id)
+
+        if not player.daily_quest:
+            return False  # No quest active
+
+        player.daily_quest["completed"] = True
         self.save_players()
+        return True
