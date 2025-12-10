@@ -6,6 +6,8 @@ from systems.quests.quest_manager import QuestManager
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")  # Jolly Fox server ID from Railway
 quest_manager = QuestManager()
+print("QUEST MANAGER INITIALIZED")
+
 
 if GUILD_ID is None:
     raise ValueError("GUILD_ID environment variable is not set!")
@@ -22,15 +24,15 @@ async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
     try:
-        # Make sure the bot actually sees the Jolly Fox guild
         guild = bot.get_guild(GUILD_ID)
+
         if guild is None:
-            print(
-                f"Warning: Bot is not in the guild with ID {GUILD_ID}. "
-                "Did you invite it to the Jolly Fox server?"
-            )
+            print("Warning: Bot not in guild!")
         else:
-            # Sync commands ONLY to Jolly Fox
+            # FORCE DISCORD TO WIPE OLD COMMAND CACHE
+            await bot.tree.clear_commands(guild=discord.Object(id=GUILD_ID))
+
+            # NOW resync fresh commands
             await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
             print(f"Synced commands to guild: {guild.name} ({guild.id})")
 
