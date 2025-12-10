@@ -1,9 +1,11 @@
 import os
 import discord
 from discord.ext import commands
+from systems.quests.quest_manager import QuestManager
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")  # Jolly Fox server ID from Railway
+quest_manager = QuestManager()
 
 if GUILD_ID is None:
     raise ValueError("GUILD_ID environment variable is not set!")
@@ -56,5 +58,12 @@ async def quest_today(interaction: discord.Interaction):
         ephemeral=True
     )
 
+@bot.tree.command(name="qtest", description="Test QuestManager connection.")
+async def qtest(interaction: discord.Interaction):
+    p = quest_manager.get_player(interaction.user.id)
+    await interaction.response.send_message(
+        f"Loaded player state for user {interaction.user.display_name}. Daily quest: {p.daily_quest}",
+        ephemeral=True
+    )
 
 bot.run(TOKEN)
