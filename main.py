@@ -20,4 +20,15 @@ async def on_ready():
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong! Jolly Fox is awake!", ephemeral=True)
 
+@bot.tree.command(name="quest_today", description="See your daily Jolly Fox guild quest.")
+async def quest_today(interaction: discord.Interaction):
+    # For now this is just a placeholder.
+    # Later we'll plug in the real quest system here.
+    await interaction.response.send_message(
+        "**[Daily Quest Placeholder]**\n"
+        "There’s no real quest system wired up yet, but the bot is listening!\n"
+        "_Next step: we’ll make this actually assign a quest just for you._",
+        ephemeral=True
+    )
+
 bot.run(TOKEN)
