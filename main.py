@@ -42,12 +42,35 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
 
-@bot.tree.command(name="quest_today", description="See your daily quest.")
+@bot.tree.command(
+    name="quest_today",
+    description="See your daily Jolly Fox guild quest."
+)
 async def quest_today(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "Daily quest system not wired yet.",
-        ephemeral=True
+    user_id = interaction.user.id
+    
+    # Assign or fetch today's quest
+    quest_id = quest_manager.assign_daily(user_id)
+    template = quest_manager.get_template(quest_id)
+
+    if template is None:
+        await interaction.response.send_message(
+            "⚠️ Error loading your quest. No templates found.",
+            ephemeral=True
+        )
+        return
+
+    # Build message text
+    msg = (
+        f"**🦊 Your Daily Quest:** `{template.name}`\n\n"
+        f"**Summary:** {template.summary}\n\n"
+        f"**Type:** `{template.type}`\n"
+        f"Use the appropriate command to complete it.\n\n"
+        f"Quest ID: `{template.quest_id}`"
     )
+
+    await interaction.response.send_message(msg, ephemeral=True)
+
 
 
 # Sync
