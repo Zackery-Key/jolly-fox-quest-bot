@@ -77,8 +77,6 @@ class QuestManager:
         out = {uid: p.to_dict() for uid, p in self.players.items()}
         with open(PLAYERS_FILE, "w") as f:
             json.dump(out, f, indent=4)
-            print("DEBUG PlayerState methods:", dir(next(iter(self.players.values()))))
-
 
     def save_board(self):
         with open(BOARD_FILE, "w") as f:
