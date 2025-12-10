@@ -77,6 +77,8 @@ class QuestManager:
         out = {uid: p.to_dict() for uid, p in self.players.items()}
         with open(PLAYERS_FILE, "w") as f:
             json.dump(out, f, indent=4)
+            print("DEBUG PlayerState methods:", dir(next(iter(self.players.values()))))
+
 
     def save_board(self):
         with open(BOARD_FILE, "w") as f:
@@ -124,13 +126,15 @@ class QuestManager:
     # -----------------------------------------------------
     def assign_daily(self, user_id):
         """Assigns a daily quest if the user has none or it's a new day."""
-        player = self.get_player(user_id)
+        player = self.get_or_create_player(user_id)  # <-- FIXED
 
         today = str(date.today())
 
         # If already has today's quest, do nothing
-        if (player.daily_quest 
-            and player.daily_quest.get("assigned_date") == today):
+        if (
+            player.daily_quest
+            and player.daily_quest.get("assigned_date") == today
+        ):
             return player.daily_quest["quest_id"]
 
         # Otherwise assign a random quest
@@ -145,6 +149,7 @@ class QuestManager:
 
         self.save_players()
         return quest_id
+
 
     # -----------------------------------------------------
     # Completing quests
