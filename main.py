@@ -29,6 +29,59 @@ async def setup_hook():
     bot.tree.copy_global_to(guild=guild)
     print(f"Setup complete for guild {GUILD_ID}")
 
+# Helpers
+async def _ensure_active_daily(
+    interaction: discord.Interaction,
+    expected_type: QuestType | None = None,
+):
+    """
+    Shared guard for daily quest commands.
+    - Ensures the user has a daily quest.
+    - Ensures it is not already completed.
+    - Optionally ensures the quest type matches expected_type.
+    Returns (player, template) or (None, None) if it handled the error.
+    """
+    user_id = interaction.user.id
+    player = quest_manager.get_player(user_id)
+
+    # No quest at all
+    if not player.daily_quest:
+        await interaction.response.send_message(
+            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True
+        )
+        return None, None
+
+    # Already completed
+    if player.daily_quest.get("completed"):
+        await interaction.response.send_message(
+            "✅ You've already completed today's quest.",
+            ephemeral=True
+        )
+        return None, None
+
+    quest_id = player.daily_quest.get("quest_id")
+    template = quest_manager.get_template(quest_id)
+
+    # Template missing (data issue)
+    if template is None:
+        await interaction.response.send_message(
+            "⚠️ Error: your quest template could not be found. Please tell an admin.",
+            ephemeral=True
+        )
+        return None, None
+
+    # Type mismatch
+    if expected_type is not None and template.type != expected_type:
+        await interaction.response.send_message(
+            f"❌ Your current quest is not a `{expected_type.value}` quest. "
+            f"Use the correct command for your quest type.",
+            ephemeral=True
+        )
+        return None, None
+
+    return player, template
+
 
 # Commands
 @bot.tree.command(name="qtest", description="Test QuestManager connection.")
@@ -87,10 +140,7 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
 
-@bot.tree.command(
-    name="quest_today",
-    description="See your daily Jolly Fox guild quest."
-)
+@bot.tree.command(name="quest_today", description="See your daily Jolly Fox guild quest.")
 async def quest_today(interaction: discord.Interaction):
     user_id = interaction.user.id
     
@@ -119,91 +169,13 @@ async def quest_today(interaction: discord.Interaction):
 
 @bot.tree.command(name="quest_npc", description="Speak with the required NPC to complete your quest.")
 async def quest_npc(interaction: discord.Interaction):
-    user_id = interaction.user.id
-    player = quest_manager.get_player(user_id)
-
-    # 1) Require an active quest
-    if not player.daily_quest:
-        await interaction.response.send_message(
-            "🦊 You don't have an active quest today. Use `/quest_today` first.",
-            ephemeral=True
-        )
-        return
-
-    # 2) Prevent multiple completions (this is what SKILL already does)
-    if player.daily_quest.get("completed"):
-        await interaction.response.send_message(
-            "✅ You've already completed today's quest.",
-            ephemeral=True
-        )
-        return
-
-    quest_id = player.daily_quest.get("quest_id")
-    template = quest_manager.get_template(quest_id)
-
-    # 3) Type check: must be SOCIAL
-    if template.type != QuestType.SOCIAL:
-        await interaction.response.send_message(
-            "❌ This is not a SOCIAL quest. Use the correct command for this quest type.",
-            ephemeral=True
-        )
-        return
-
-    # 4) Enforce required channel
-    required_channel = template.required_channel_id
-    if required_channel and interaction.channel_id != required_channel:
-        await interaction.response.send_message(
-            f"❌ You must speak with **{template.npc_id}** in <#{required_channel}>.",
-            ephemeral=True
-        )
-        return
-
-    # 5) Load NPC
-    npc = quest_manager.get_npc(template.npc_id)
-    if npc is None:
-        await interaction.response.send_message(
-            f"⚠️ Error: NPC `{template.npc_id}` not found.",
-            ephemeral=True
-        )
-        return
-
-    # 6) Mark quest complete
-    quest_manager.complete_daily(user_id)
-
-    # 7) Award points once
-    quest_manager.quest_board.add_points(template.points)
-    quest_manager.save_board()
-
-    # 8) NPC reply
-    reply_text = npc.default_reply or "They acknowledge your presence."
-
-    await interaction.response.send_message(
-        f"**{npc.name}** says:\n> {reply_text}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
-        ephemeral=True
+    # Shared guards: has quest, not completed, type = SOCIAL
+    player, template = await _ensure_active_daily(
+        interaction,
+        expected_type=QuestType.SOCIAL
     )
-
-    user_id = interaction.user.id
-    player = quest_manager.get_player(user_id)
-
-    # No active quest
-    if not player.daily_quest:
-        await interaction.response.send_message(
-            "🦊 You don't have an active quest today. Use `/quest_today` first.",
-            ephemeral=True
-        )
-        return
-
-    quest_id = player.daily_quest.get("quest_id")
-    template = quest_manager.get_template(quest_id)
-
-    # Not a SOCIAL quest
-    if template.type != QuestType.SOCIAL:
-        await interaction.response.send_message(
-            "❌ This is not a SOCIAL quest. Use the correct command for this quest type.",
-            ephemeral=True
-        )
-        return
+    if player is None:
+        return  # guard already responded
 
     # Enforce required channel
     required_channel = template.required_channel_id
@@ -224,13 +196,12 @@ async def quest_npc(interaction: discord.Interaction):
         return
 
     # Complete quest
-    quest_manager.complete_daily(user_id)
+    quest_manager.complete_daily(interaction.user.id)
 
     # Award points
     quest_manager.quest_board.add_points(template.points)
     quest_manager.save_board()
 
-    # NPC reply
     reply_text = npc.default_reply or "They acknowledge your presence."
 
     await interaction.response.send_message(
@@ -242,33 +213,15 @@ async def quest_npc(interaction: discord.Interaction):
 
 @bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
 async def quest_skill(interaction: discord.Interaction):
-    user_id = interaction.user.id
-    player = quest_manager.get_player(user_id)
-
-    if not player.daily_quest:
-        await interaction.response.send_message(
-            "🦊 You don't have an active quest today. Use `/quest_today` first.",
-            ephemeral=True
-        )
+    # Shared guards: has quest, not completed, type = SKILL
+    player, template = await _ensure_active_daily(
+        interaction,
+        expected_type=QuestType.SKILL
+    )
+    if player is None:
         return
 
-    if player.daily_quest.get("completed"):
-        await interaction.response.send_message(
-            "✅ You've already completed today's quest.",
-            ephemeral=True
-        )
-        return
-
-    quest_id = player.daily_quest.get("quest_id")
-    template = quest_manager.get_template(quest_id)
-
-    if template.type != QuestType.SKILL:
-        await interaction.response.send_message(
-            "❌ Your current quest is not a SKILL quest. Use the correct command for your quest type.",
-            ephemeral=True
-        )
-        return
-
+    # Optional channel restriction
     required_channel = template.required_channel_id
     if required_channel and interaction.channel_id != required_channel:
         await interaction.response.send_message(
@@ -288,7 +241,7 @@ async def quest_skill(interaction: discord.Interaction):
         gained = template.points_on_fail or 0
         result_text = f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
 
-    quest_manager.complete_daily(user_id)
+    quest_manager.complete_daily(interaction.user.id)
 
     if gained > 0:
         quest_manager.quest_board.add_points(gained)
