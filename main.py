@@ -39,8 +39,34 @@ async def qtest(interaction: discord.Interaction):
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_debug_clear", description="(DEV ONLY) Clears your daily quest for testing.")
-async def quest_debug_clear(interaction: discord.Interaction):
+
+@bot.tree.command(name="quest_admin_reset_user", description="Admin: clear a user's quest data so they can get a new daily quest.")
+async def quest_admin_reset_user(
+    interaction: discord.Interaction,
+    member: discord.Member
+):
+    # Permission check
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message(
+            "❌ You do not have permission to use this command.",
+            ephemeral=True
+        )
+        return
+
+    ok = quest_manager.clear_player(member.id)
+
+    if ok:
+        await interaction.response.send_message(
+            f"🧹 Cleared quest data for **{member.display_name}**. "
+            f"They can now run `/quest_today` to get a new daily quest.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"ℹ️ No quest data was found for **{member.display_name}**.",
+            ephemeral=True
+        )
+
     user_id = interaction.user.id
     if user_id in quest_manager.players:
         del quest_manager.players[user_id]
@@ -54,6 +80,7 @@ async def quest_debug_clear(interaction: discord.Interaction):
             "No player record found to clear.",
             ephemeral=True
         )
+
 
 @bot.tree.command(name="ping", description="Test that the bot is alive.")
 async def ping(interaction: discord.Interaction):
@@ -89,8 +116,73 @@ async def quest_today(interaction: discord.Interaction):
 
     await interaction.response.send_message(msg, ephemeral=True)
 
+
 @bot.tree.command(name="quest_npc", description="Speak with the required NPC to complete your quest.")
 async def quest_npc(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    player = quest_manager.get_player(user_id)
+
+    # 1) Require an active quest
+    if not player.daily_quest:
+        await interaction.response.send_message(
+            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True
+        )
+        return
+
+    # 2) Prevent multiple completions (this is what SKILL already does)
+    if player.daily_quest.get("completed"):
+        await interaction.response.send_message(
+            "✅ You've already completed today's quest.",
+            ephemeral=True
+        )
+        return
+
+    quest_id = player.daily_quest.get("quest_id")
+    template = quest_manager.get_template(quest_id)
+
+    # 3) Type check: must be SOCIAL
+    if template.type != QuestType.SOCIAL:
+        await interaction.response.send_message(
+            "❌ This is not a SOCIAL quest. Use the correct command for this quest type.",
+            ephemeral=True
+        )
+        return
+
+    # 4) Enforce required channel
+    required_channel = template.required_channel_id
+    if required_channel and interaction.channel_id != required_channel:
+        await interaction.response.send_message(
+            f"❌ You must speak with **{template.npc_id}** in <#{required_channel}>.",
+            ephemeral=True
+        )
+        return
+
+    # 5) Load NPC
+    npc = quest_manager.get_npc(template.npc_id)
+    if npc is None:
+        await interaction.response.send_message(
+            f"⚠️ Error: NPC `{template.npc_id}` not found.",
+            ephemeral=True
+        )
+        return
+
+    # 6) Mark quest complete
+    quest_manager.complete_daily(user_id)
+
+    # 7) Award points once
+    quest_manager.quest_board.add_points(template.points)
+    quest_manager.save_board()
+
+    # 8) NPC reply
+    reply_text = npc.default_reply or "They acknowledge your presence."
+
+    await interaction.response.send_message(
+        f"**{npc.name}** says:\n> {reply_text}\n\n"
+        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        ephemeral=True
+    )
+
     user_id = interaction.user.id
     player = quest_manager.get_player(user_id)
 
@@ -146,6 +238,7 @@ async def quest_npc(interaction: discord.Interaction):
         f"✨ **Quest complete!** You earned **{template.points}** guild points.",
         ephemeral=True
     )
+
 
 @bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
 async def quest_skill(interaction: discord.Interaction):

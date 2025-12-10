@@ -99,6 +99,22 @@ class QuestManager:
         return self.players[user_id]
 
     # -----------------------------------------------------
+    # Player management helpers
+    # -----------------------------------------------------
+    def clear_player(self, user_id: int) -> bool:
+        """Remove a single player's stored state."""
+        if user_id in self.players:
+            del self.players[user_id]
+            self.save_players()
+            return True
+        return False
+
+    def clear_all_players(self) -> None:
+        """Dangerous: wipe all player data."""
+        self.players = {}
+        self.save_players()
+
+    # -----------------------------------------------------
     # Daily Quest Assignment
     # -----------------------------------------------------
     def assign_daily(self, user_id):
