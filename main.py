@@ -71,6 +71,63 @@ async def quest_today(interaction: discord.Interaction):
 
     await interaction.response.send_message(msg, ephemeral=True)
 
+@bot.tree.command(name="quest_npc", description="Speak with the required NPC to complete your quest.")
+async def quest_npc(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    player = quest_manager.get_player(user_id)
+
+    # No active quest
+    if not player.daily_quest:
+        await interaction.response.send_message(
+            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True
+        )
+        return
+
+    quest_id = player.daily_quest.get("quest_id")
+    template = quest_manager.get_template(quest_id)
+
+    # Not a SOCIAL quest
+    if template.type != "SOCIAL":
+        await interaction.response.send_message(
+            "❌ This is not a SOCIAL quest. Use the correct command for this quest type.",
+            ephemeral=True
+        )
+        return
+
+    # Enforce required channel
+    required_channel = template.required_channel_id
+    if required_channel and interaction.channel_id != required_channel:
+        await interaction.response.send_message(
+            f"❌ You must speak with **{template.npc_id}** in <#{required_channel}>.",
+            ephemeral=True
+        )
+        return
+
+    # Load NPC
+    npc = quest_manager.get_npc(template.npc_id)
+    if npc is None:
+        await interaction.response.send_message(
+            f"⚠️ Error: NPC `{template.npc_id}` not found.",
+            ephemeral=True
+        )
+        return
+
+    # Complete quest
+    quest_manager.complete_daily(user_id)
+
+    # Award points
+    quest_manager.quest_board.add_points(template.points)
+    quest_manager.save_board()
+
+    # NPC reply
+    reply_text = npc.default_reply or "They acknowledge your presence."
+
+    await interaction.response.send_message(
+        f"**{npc.name}** says:\n> {reply_text}\n\n"
+        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        ephemeral=True
+    )
 
 
 # Sync

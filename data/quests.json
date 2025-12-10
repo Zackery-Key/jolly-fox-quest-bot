@@ -4,7 +4,7 @@
         "name": "Speak with Celara",
         "type": "SOCIAL",
         "npc_id": "celara",
-        "required_channel_id": 0,
+        "required_channel_id": 1448375891444109395,
         "points": 5,
         "summary": "Check in with Celara at the tavern.",
         "details": "Celara wants an update from the field. Visit her and report your findings.",
