@@ -9,15 +9,16 @@ from .quest_models import QuestTemplate
 
 
 # -------------------------------------------------
-# Base paths
+# Base paths (Persistent on Railway)
 # -------------------------------------------------
-DATA_DIR = "data"
+DATA_DIR = "/mnt/data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 PLAYERS_FILE = os.path.join(DATA_DIR, "players.json")
 BOARD_FILE   = os.path.join(DATA_DIR, "quest_board.json")
 NPCS_FILE    = os.path.join(DATA_DIR, "npcs.json")
 QUESTS_FILE  = os.path.join(DATA_DIR, "quests.json")
+
 
 
 # =================================================

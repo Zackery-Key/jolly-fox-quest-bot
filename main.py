@@ -95,9 +95,21 @@ def build_board_embed():
     )
 
     # Global progress
+    # Prevent division by zero
+    if season_goal > 0:
+        pct = (global_points / season_goal) * 100
+    else:
+        pct = 0
+
+    pct_text = f"{pct:.1f}%"  # one decimal place, e.g., 4.2%
+
     embed.add_field(
         name="📊 Global Guild Points",
-        value=f"{global_points} / {season_goal} pts\n{progress_bar}",
+        value=(
+            f"{global_points} / {season_goal} pts "
+            f"(**{pct_text}**)\n"
+            f"{progress_bar}"
+        ),
         inline=False,
     )
 
@@ -346,6 +358,7 @@ async def quest_admin_cleanup(interaction: discord.Interaction):
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
+# ADMIN Quest
 @bot.tree.command(name="quest_admin_list_quests",description="Admin: List all quest templates.",)
 async def quest_admin_list_quests(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
@@ -374,65 +387,184 @@ async def quest_admin_list_quests(interaction: discord.Interaction):
     msg = "**Current Quest Templates:**\n" + "\n".join(lines)
     await interaction.response.send_message(msg, ephemeral=True)
 
-@bot.tree.command(name="quest_admin_add_quest",description="Admin: Create or update a quest template.",)
-async def quest_admin_add_quest(
+@bot.tree.command(name="quest_admin_add_social_quest",description="Admin: Create or update a SOCIAL quest (NPC interaction).",)
+async def quest_admin_add_social_quest(
     interaction: discord.Interaction,
     quest_id: str,
     name: str,
-    quest_type: str,
     points: int,
-    required_channel: discord.TextChannel | None = None,
-    source_channel: discord.TextChannel | None = None,
-    turnin_channel: discord.TextChannel | None = None,
-    npc_id: str | None = None,
-    item_name: str | None = None,
-    summary: str | None = None,
+    required_channel: discord.TextChannel,
+    npc_id: str,
+    summary: str,
     details: str | None = None,
     restricted_role: discord.Role | None = None,
 ):
     if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
         return
 
     # Validate quest type
-    try:
-        qtype = QuestType(quest_type.upper())
-    except ValueError:
-        valid = ", ".join(t.value for t in QuestType)
-        await interaction.response.send_message(
-            f"❌ Invalid quest_type `{quest_type}`. Use one of: {valid}",
-            ephemeral=True,
-        )
-        return
+    qtype = QuestType.SOCIAL
 
     tmpl = QuestTemplate(
         quest_id=quest_id,
         name=name,
         type=qtype,
         points=points,
-        required_channel_id=required_channel.id if required_channel else None,
-        source_channel_id=source_channel.id if source_channel else None,
-        turnin_channel_id=turnin_channel.id if turnin_channel else None,
+        required_channel_id=required_channel.id,
         npc_id=npc_id,
-        item_name=item_name,
-        summary=summary or "",
+        summary=summary,
         details=details or "",
-        tags=[],  # you can still edit tags in JSON if you want
+        tags=["social", "npc"],
         allowed_roles=[restricted_role.id] if restricted_role else [],
     )
 
-    # Persist to JSON, then refresh QuestManager cache
     storage.save_template(tmpl)
     quest_manager.quest_templates = storage.load_templates()
 
     await interaction.response.send_message(
-        f"✅ Quest template `{quest_id}` saved.\n"
+        f"📝 **SOCIAL Quest Saved**\n"
+        f"- ID: `{quest_id}`\n"
         f"- Name: **{name}**\n"
-        f"- Type: `{qtype.value}`\n"
-        f"- Points: {points}",
+        f"- Points: {points}\n"
+        f"- Channel: <#{required_channel.id}>\n"
+        f"- NPC: `{npc_id}`",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="quest_admin_add_skill_quest",description="Admin: Create or update a SKILL quest (training / roll).",)
+async def quest_admin_add_skill_quest(
+    interaction: discord.Interaction,
+    quest_id: str,
+    name: str,
+    dc: int,
+    points_on_success: int,
+    points_on_fail: int,
+    required_channel: discord.TextChannel,
+    summary: str,
+    details: str | None = None,
+    restricted_role: discord.Role | None = None,
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    qtype = QuestType.SKILL
+
+    tmpl = QuestTemplate(
+        quest_id=quest_id,
+        name=name,
+        type=qtype,
+        points=0,  # SKILL uses success/fail only
+        dc=dc,
+        points_on_success=points_on_success,
+        points_on_fail=points_on_fail,
+        required_channel_id=required_channel.id,
+        summary=summary,
+        details=details or "",
+        tags=["skill"],
+        allowed_roles=[restricted_role.id] if restricted_role else [],
+    )
+
+    storage.save_template(tmpl)
+    quest_manager.quest_templates = storage.load_templates()
+
+    await interaction.response.send_message(
+        f"📝 **SKILL Quest Saved**\n"
+        f"- ID: `{quest_id}`\n"
+        f"- Name: **{name}**\n"
+        f"- DC: {dc}\n"
+        f"- Success: {points_on_success} pts\n"
+        f"- Fail: {points_on_fail} pts\n"
+        f"- Channel: <#{required_channel.id}>",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="quest_admin_add_travel_quest",description="Admin: Create or update a TRAVEL quest (check-in).",)
+async def quest_admin_add_travel_quest(
+    interaction: discord.Interaction,
+    quest_id: str,
+    name: str,
+    points: int,
+    required_channel: discord.TextChannel,
+    summary: str,
+    details: str | None = None,
+    restricted_role: discord.Role | None = None,
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    qtype = QuestType.TRAVEL
+
+    tmpl = QuestTemplate(
+        quest_id=quest_id,
+        name=name,
+        type=qtype,
+        points=points,
+        required_channel_id=required_channel.id,
+        summary=summary,
+        details=details or "",
+        tags=["travel"],
+        allowed_roles=[restricted_role.id] if restricted_role else [],
+    )
+
+    storage.save_template(tmpl)
+    quest_manager.quest_templates = storage.load_templates()
+
+    await interaction.response.send_message(
+        f"📝 **TRAVEL Quest Saved**\n"
+        f"- ID: `{quest_id}`\n"
+        f"- Name: **{name}**\n"
+        f"- Points: {points}\n"
+        f"- Channel: <#{required_channel.id}>",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="quest_admin_add_fetch_quest",description="Admin: Create or update a FETCH quest (gather + turn-in).",)
+async def quest_admin_add_fetch_quest(
+    interaction: discord.Interaction,
+    quest_id: str,
+    name: str,
+    points: int,
+    item_name: str,
+    source_channel: discord.TextChannel,
+    turnin_channel: discord.TextChannel,
+    summary: str,
+    details: str | None = None,
+    restricted_role: discord.Role | None = None,
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    qtype = QuestType.FETCH
+
+    tmpl = QuestTemplate(
+        quest_id=quest_id,
+        name=name,
+        type=qtype,
+        points=points,
+        item_name=item_name,
+        source_channel_id=source_channel.id,
+        turnin_channel_id=turnin_channel.id,
+        summary=summary,
+        details=details or "",
+        tags=["fetch"],
+        allowed_roles=[restricted_role.id] if restricted_role else [],
+    )
+
+    storage.save_template(tmpl)
+    quest_manager.quest_templates = storage.load_templates()
+
+    await interaction.response.send_message(
+        f"📝 **FETCH Quest Saved**\n"
+        f"- ID: `{quest_id}`\n"
+        f"- Name: **{name}**\n"
+        f"- Points: {points}\n"
+        f"- Item: `{item_name}`\n"
+        f"- Source: <#{source_channel.id}>\n"
+        f"- Turn-in: <#{turnin_channel.id}>",
         ephemeral=True,
     )
 
@@ -463,6 +595,8 @@ async def quest_admin_remove_quest(
         ephemeral=True,
     )
 
+
+#ADMIN NPC
 @bot.tree.command(name="quest_admin_list_npcs",description="Admin: List all quest NPCs.",)
 async def quest_admin_list_npcs(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
@@ -543,6 +677,8 @@ async def quest_admin_remove_npc(
         ephemeral=True,
     )
 
+
+#ADMIN Board
 @bot.tree.command(name="quest_admin_set_season",description="Admin: Start a new season and set goal/reward text.",)
 async def quest_admin_set_season(
     interaction: discord.Interaction,
@@ -667,11 +803,21 @@ async def quest_today(interaction: discord.Interaction):
     qtype_str = template.type.value
 
     header = f"**🦊 Your Daily Quest — {status_label}**\n"
-    body = (
-        f"**Name:** {template.name}\n"
-        f"**Type:** `{qtype_str}`\n\n"
-        f"**Summary:** {template.summary}\n"
-    )
+
+    # Start building body
+    body = f"**Name:** {template.name}\n"
+
+    # If SKILL quest → show success/fail scoring
+    if template.type == QuestType.SKILL:
+        body += f"**Success:** {template.points_on_success or 0} pts\n"
+        body += f"**Fail:** {template.points_on_fail or 0} pts\n\n"
+    else:
+        # All other quest types use the base points value
+        body += f"**Points:** {template.points}\n\n"
+
+    # Summary is always shown
+    body += f"**Summary:** {template.summary}\n"
+
 
     hint_lines: list[str] = []
 
@@ -937,85 +1083,114 @@ async def quest_turnin(interaction: discord.Interaction):
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
-@bot.tree.command(name="quest_profile",description="View your Jolly Fox Guild badge and quest history.",)
+@bot.tree.command(name="quest_profile",description="View your Jolly Fox Guild profile.")
 async def quest_profile(interaction: discord.Interaction):
     user = interaction.user
-    player = quest_manager.get_player(user.id)
+    user_id = user.id
 
-    if not player:
-        await interaction.response.send_message(
-            f"**🦊 Guild Badge — {user.display_name}**\n"
-            "No profile found.\n"
-            "Use `/quest_today` to begin your guild journey.",
-            ephemeral=False,
-        )
-        return
+    player = quest_manager.get_or_create_player(user_id)
 
-    daily = player.daily_quest or {}
-    lines: list[str] = []
+    # Basic fields
+    level = player.level
+    xp = player.xp
+    next_xp = player.next_level_xp
 
-    lines.append(f"**🛡️ Jolly Fox Guild Badge — {user.display_name}**\n")
+    # XP Progress Bar
+    filled = int((xp / next_xp) * 10) if next_xp > 0 else 0
+    bar = "█" * filled + "░" * (10 - filled)
 
-    xp_needed = player.level * 20
-    lines.append(f"**Level:** {player.level}")
-    lines.append(f"**XP:** {player.xp}/{xp_needed}")
+    # Faction info
+    faction = get_faction(player.faction_id)
+    faction_name = faction.name if faction else "None"
+    faction_icon = faction.emoji if faction else "❔"
 
-    bar_fill = int((player.xp / xp_needed) * 10) if xp_needed > 0 else 0
-    bar_fill = max(0, min(10, bar_fill))
-    bar = "█" * bar_fill + "░" * (10 - bar_fill)
-    lines.append(f"**Progress:** `{bar}`")
-    lines.append("")
+    # Daily quest status
+    dq = player.daily_quest
+    has_dq = bool(dq.get("quest_id"))
+    dq_text = ""
 
-    # Faction (role-based)
-    faction_id = get_member_faction_id(user)
-    if faction_id:
-        fac = get_faction(faction_id)
-        if fac:
-            lines.append(f"**Faction:** {fac.emoji} {fac.name}")
+    if has_dq:
+        qid = dq["quest_id"]
+        tmpl = quest_manager.get_template(qid)
+        status = "Completed" if dq.get("completed") else "Active"
+
+        if tmpl:
+            dq_text = (
+                f"**{tmpl.name}**\n"
+                f"Status: **{status}**\n"
+                f"*{tmpl.summary}*"
+            )
         else:
-            lines.append(f"**Faction:** (Unknown faction `{faction_id}`)")
-    else:
-        lines.append("**Faction:** None (You have not joined a faction yet.)")
-    lines.append("")
+            dq_text = "⚠️ (Quest template missing)"
 
-    # Quest history
-    lines.append("**Quest History:**")
-    lines.append(f"• Lifetime Quests Completed: **{player.lifetime_completed}**")
-    lines.append(f"• Seasonal Quests Completed: **{player.season_completed}**")
-    lines.append("")
+    else:
+        dq_text = "No quest assigned today. Use `/quest_today`."
+
+    # Inventory formatting
+    if player.inventory:
+        inv_lines = [f"- **{item}** × {qty}" for item, qty in player.inventory.items()]
+        inv_text = "\n".join(inv_lines)
+    else:
+        inv_text = "_Empty_"
+
+    # Seasonal stats
+    lifetime = player.lifetime_completed
+    seasonal = player.seasonal_completed
+
+    # --- Build Embed ---
+    embed = discord.Embed(
+        title=f"🦊 {user.display_name} — Guild Profile",
+        color=discord.Color.orange(),
+    )
+
+    # Thumbnail = avatar
+    embed.set_thumbnail(url=user.display_avatar.url)
+
+    # Core stats
+    embed.add_field(
+        name="📘 Level & Experience",
+        value=(
+            f"**Level:** {level}\n"
+            f"**XP:** {xp} / {next_xp}\n"
+            f"`{bar}`"
+        ),
+        inline=False,
+    )
+
+    # Faction
+    embed.add_field(
+        name="🏅 Faction",
+        value=f"{faction_icon} **{faction_name}**",
+        inline=True,
+    )
 
     # Daily quest
-    if not daily:
-        lines.append("**Daily Quest:** None assigned yet.")
-        lines.append("Use `/quest_today` to receive today’s quest.\n")
-    else:
-        quest_id = daily.get("quest_id")
-        template = quest_manager.get_template(quest_id)
-        completed = daily.get("completed", False)
-        status_icon = "✅" if completed else "🟠"
+    embed.add_field(
+        name="🎯 Daily Quest",
+        value=dq_text,
+        inline=False,
+    )
 
-        if template:
-            lines.append(f"**Daily Quest:** {status_icon} {template.name}")
-            lines.append(f"• Type: `{template.type}`")
-            lines.append(f"• Summary: {template.summary}")
-        else:
-            lines.append(f"**Daily Quest:** Template missing for `{quest_id}`")
-        lines.append("")
+    # Progress
+    embed.add_field(
+        name="🏆 Quest Completion",
+        value=(
+            f"**Seasonal Completed:** {seasonal}\n"
+            f"**Lifetime Completed:** {lifetime}"
+        ),
+        inline=True,
+    )
 
     # Inventory
-    if player.inventory:
-        lines.append("**Inventory (quest items):**")
-        for item in player.inventory:
-            lines.append(f"• `{item.quest_id}` — {item.item_name}")
-    else:
-        lines.append("**Inventory:** Empty")
-    lines.append("")
+    embed.add_field(
+        name="🎒 Inventory",
+        value=inv_text,
+        inline=False,
+    )
 
-    # Board status
-    board_points = quest_manager.quest_board.global_points
-    lines.append(f"**Guild Quest Board (season):** {board_points} points")
+    embed.set_footer(text="Jolly Fox Guild — Adventure Awaits")
 
-    await interaction.response.send_message("\n".join(lines))
+    await interaction.response.send_message(embed=embed)
 
 
 # Sync on ready
