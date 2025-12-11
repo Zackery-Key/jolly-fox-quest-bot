@@ -361,7 +361,6 @@ async def quest_admin_migrate_profiles(interaction: discord.Interaction):
         ephemeral=True
     )
 
-
 @bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.",)
 async def quest_board_cmd(interaction: discord.Interaction):
     board = quest_manager.quest_board
@@ -452,6 +451,80 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
 # ADMIN Quest
+@bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).")
+async def quest_import(
+    interaction: discord.Interaction,
+    file: discord.Attachment,
+    mode: str = "overwrite"
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    if mode not in ("overwrite", "merge"):
+        return await interaction.response.send_message("❌ Mode must be 'overwrite' or 'merge'.", ephemeral=True)
+
+    import json
+    from systems.quests import storage, quest_manager
+    from systems.quests.quest_models import QuestTemplate
+
+    try:
+        raw_bytes = await file.read()
+        new_data = json.loads(raw_bytes.decode("utf-8"))
+    except Exception as e:
+        return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
+
+    # Validate each quest entry
+    for qid, quest in new_data.items():
+        if "name" not in quest or "type" not in quest:
+            return await interaction.response.send_message(
+                f"❌ Quest '{qid}' missing required fields ('name', 'type').",
+                ephemeral=True
+            )
+
+    # Load existing quest JSON
+    current = storage.load_quests()
+
+    # Apply mode
+    if mode == "overwrite":
+        final_data = new_data
+    else:
+        final_data = {**current, **new_data}
+
+    # Save
+    storage.save_quests(final_data)
+
+    # Reload quest templates into memory
+    quest_manager.load_templates()
+
+    await interaction.response.send_message(
+        f"🟢 Quest import complete! Mode: **{mode}**\n"
+        f"Imported **{len(new_data)}** quest(s).",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="quest_export",description="ADMIN: Export current quest JSON file.")
+async def quest_export(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    from systems.quests import storage
+    import discord
+    import json
+
+    quests = storage.load_quests()
+    content = json.dumps(quests, indent=4)
+
+    file = discord.File(
+        fp=bytes(content, "utf-8"),
+        filename="quests_export.json"
+    )
+
+    await interaction.response.send_message(
+        content="📦 Quest export file:",
+        file=file,
+        ephemeral=True
+    )
+
 @bot.tree.command(name="quest_admin_list_quests",description="Admin: List all quest templates.",)
 async def quest_admin_list_quests(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
@@ -690,6 +763,76 @@ async def quest_admin_remove_quest(
 
 
 #ADMIN NPC
+@bot.tree.command(name="npc_import",description="ADMIN: Import NPC JSON file (overwrite or merge).")
+async def npc_import(
+    interaction: discord.Interaction,
+    file: discord.Attachment,
+    mode: str = "overwrite"
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    if mode not in ("overwrite", "merge"):
+        return await interaction.response.send_message("❌ Mode must be 'overwrite' or 'merge'.", ephemeral=True)
+
+    import json
+    from systems.quests import storage
+
+    # Read uploaded JSON
+    try:
+        raw_bytes = await file.read()
+        new_data = json.loads(raw_bytes.decode("utf-8"))
+    except Exception as e:
+        return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
+
+    # Validate NPC structure
+    for npc_id, npc in new_data.items():
+        if "name" not in npc:
+            return await interaction.response.send_message(
+                f"❌ NPC '{npc_id}' missing 'name' field.", ephemeral=True
+            )
+
+    # Load existing NPCs
+    current = storage.load_npcs()
+
+    # Overwrite or merge
+    if mode == "overwrite":
+        final_data = new_data
+    else:  # merge
+        final_data = {**current, **new_data}
+
+    # Save final NPC JSON
+    storage.save_npcs(final_data)
+
+    await interaction.response.send_message(
+        f"🟢 NPC import complete! Mode: **{mode}**\n"
+        f"Imported **{len(new_data)}** NPC(s).",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="npc_export",description="ADMIN: Export current NPC JSON file.")
+async def npc_export(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    from systems.quests import storage
+    import discord
+    import json
+
+    npcs = storage.load_npcs()
+    content = json.dumps(npcs, indent=4)
+
+    file = discord.File(
+        fp=bytes(content, "utf-8"),
+        filename="npcs_export.json"
+    )
+
+    await interaction.response.send_message(
+        content="📦 NPC export file:",
+        file=file,
+        ephemeral=True
+    )
+
 @bot.tree.command(name="quest_admin_list_npcs",description="Admin: List all quest NPCs.",)
 async def quest_admin_list_npcs(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
@@ -1015,36 +1158,64 @@ async def quest_today(interaction: discord.Interaction):
 
 @bot.tree.command(name="quest_npc",description="Speak with the required NPC to complete your quest.",)
 async def quest_npc(interaction: discord.Interaction):
+    import random
+
+    # Validate daily quest + ensure type = SOCIAL
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.SOCIAL
     )
     if player is None:
         return
 
+    # Enforce required channel
     required_channel = template.required_channel_id
     if required_channel and interaction.channel_id != required_channel:
-        await interaction.response.send_message(
+        return await interaction.response.send_message(
             f"❌ You must speak with **{template.npc_id}** in <#{required_channel}>.",
             ephemeral=True,
         )
-        return
 
     npc = quest_manager.get_npc(template.npc_id)
     if npc is None:
-        await interaction.response.send_message(
+        return await interaction.response.send_message(
             f"⚠️ Error: NPC `{template.npc_id}` not found.",
             ephemeral=True,
         )
-        return
 
+    # -------------------------------------------------------------
+    # NPC DIALOGUE SELECTION LOGIC
+    # -------------------------------------------------------------
+    reply_text = None
+
+    # 1️⃣ Quest-specific dialogue
+    quest_type_str = template.type.value  # "SOCIAL"
+    if npc.quest_dialogue.get(quest_type_str):
+        reply_text = random.choice(npc.quest_dialogue[quest_type_str])
+
+    # 2️⃣ Random greeting
+    elif npc.greetings:
+        reply_text = random.choice(npc.greetings)
+
+    # 3️⃣ Idle chatter
+    elif npc.idle_lines:
+        reply_text = random.choice(npc.idle_lines)
+
+    # 4️⃣ Legacy fallback
+    else:
+        reply_text = npc.default_reply or f"{npc.name} acknowledges your presence."
+
+    # -------------------------------------------------------------
+    # Complete quest + award points
+    # -------------------------------------------------------------
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
-    reply_text = npc.default_reply or "They acknowledge your presence."
-
+    # -------------------------------------------------------------
+    # Send message
+    # -------------------------------------------------------------
     await interaction.response.send_message(
         f"**{npc.name}** says:\n> {reply_text}\n\n"
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
