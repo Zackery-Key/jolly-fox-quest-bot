@@ -104,34 +104,28 @@ class QuestManager:
         storage.save_players(self.players)
         return True
 
-    # -----------------------------------------------------
-    # Quest Board
-    # -----------------------------------------------------
     def save_board(self):
-        """Persist the quest board."""
         storage.save_board(self.quest_board)
 
-    # -----------------------------------------------------
-    # Scoreboard
-    # -----------------------------------------------------
     def award_points(self, user_id: int, amount: int, faction_id: str | None = None):
         """
         Award guild points for a quest completion.
         Always increases global points.
-        Also increases the given faction's points, if faction_id is not None.
+        Also increases faction points if faction_id is provided.
         """
         if amount <= 0:
             return
 
-        # Global
+        # Global seasonal points
         self.quest_board.global_points += amount
 
-        # Faction
+        # Faction bucket
         if faction_id:
             current = self.quest_board.faction_points.get(faction_id, 0)
             self.quest_board.faction_points[faction_id] = current + amount
 
-        storage.save_board(self.quest_board)
+        # Persist
+        self.save_board()
 
     
     def get_scoreboard(self):
