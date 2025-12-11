@@ -120,7 +120,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
 
 # Commands
-@bot.tree.command(name="quest_board", description="Show the Jolly Fox seasonal quest scoreboard.")
+@bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.")
 async def quest_board(interaction: discord.Interaction):
     stats = quest_manager.get_scoreboard()
 
@@ -128,9 +128,7 @@ async def quest_board(interaction: discord.Interaction):
     lifetime_completed = stats["lifetime_completed"]
     season_completed = stats["season_completed"]
 
-    # You can tweak this goal whenever you want
-    SEASON_GOAL = 100  # e.g., 100 points per season
-
+    SEASON_GOAL = 100  # you can tweak this anytime
     progress_bar = make_progress_bar(global_points, SEASON_GOAL)
 
     embed = discord.Embed(
@@ -157,14 +155,41 @@ async def quest_board(interaction: discord.Interaction):
         inline=True
     )
 
-    # Later we can add faction standings here
-
     embed.set_footer(
         text="Every completed quest pushes the Jolly Fox further this season."
     )
 
-    # Public on purpose so it hypes people
-    await interaction.response.send_message(embed=embed)
+    board = quest_manager.quest_board
+    updated_existing = False
+
+    # Try to edit existing board message if we know where it lives
+    if board.display_channel_id and board.message_id:
+        channel = interaction.client.get_channel(board.display_channel_id)
+        try:
+            if channel is None:
+                channel = await interaction.client.fetch_channel(board.display_channel_id)
+
+            msg = await channel.fetch_message(board.message_id)
+            await msg.edit(embed=embed)
+            updated_existing = True
+        except Exception:
+            # message/channel might have been deleted; fall back to creating a new one
+            updated_existing = False
+
+    if not updated_existing:
+        # Create a new PUBLIC board message in the current channel
+        await interaction.response.send_message(embed=embed)
+        msg = await interaction.original_response()
+
+        board.display_channel_id = msg.channel.id
+        board.message_id = msg.id
+        quest_manager.save_board()
+    else:
+        # We updated the existing pinned board; give a quiet thumbs-up
+        await interaction.response.send_message(
+            "🔄 Updated the existing quest board message.",
+            ephemeral=True
+        )
 
 
 @bot.tree.command(name="quest_admin_reset_user", description="Admin: Reset a user's quest profile completely.")

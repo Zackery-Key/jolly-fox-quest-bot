@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Dict, List, Optional
+from typing import Dict
 
 from .player_state import PlayerState
 from .quest_board import QuestBoard
@@ -26,7 +26,8 @@ QUESTS_FILE  = os.path.join(DATA_DIR, "quests.json")
 
 def load_players() -> Dict[int, PlayerState]:
     """Load PlayerState objects from JSON."""
-    players = {}
+    players: Dict[int, PlayerState] = {}
+
     if not os.path.exists(PLAYERS_FILE):
         return players
 
@@ -36,7 +37,7 @@ def load_players() -> Dict[int, PlayerState]:
     for key, pdata in raw.items():
         try:
             uid = int(key)
-        except:
+        except Exception:
             uid = pdata.get("user_id", 0)
 
         ps = PlayerState.from_dict(pdata)
@@ -53,7 +54,6 @@ def save_players(players: Dict[int, PlayerState]) -> None:
         json.dump(raw, f, indent=4)
 
 
-# Single-player helpers (Mongo-style API)
 def save_player(player: PlayerState) -> None:
     """Update a single player entry."""
     players = load_players()
@@ -86,6 +86,10 @@ def load_board() -> QuestBoard:
     board.season_id = raw.get("season_id", "default_season")
     board.global_points = raw.get("global_points", 0)
 
+    # NEW: where the board is displayed
+    board.display_channel_id = raw.get("display_channel_id")
+    board.message_id = raw.get("message_id")
+
     return board
 
 
@@ -94,6 +98,8 @@ def save_board(board: QuestBoard) -> None:
     data = {
         "season_id": board.season_id,
         "global_points": board.global_points,
+        "display_channel_id": board.display_channel_id,
+        "message_id": board.message_id,
     }
     with open(BOARD_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
@@ -105,7 +111,7 @@ def save_board(board: QuestBoard) -> None:
 
 def load_npcs() -> Dict[str, NPC]:
     """Load NPCs from JSON."""
-    npcs = {}
+    npcs: Dict[str, NPC] = {}
 
     if not os.path.exists(NPCS_FILE):
         return npcs
@@ -147,7 +153,7 @@ def delete_npc(npc_id: str) -> None:
 
 def load_templates() -> Dict[str, QuestTemplate]:
     """Load quest templates from JSON."""
-    templates = {}
+    templates: Dict[str, QuestTemplate] = {}
 
     if not os.path.exists(QUESTS_FILE):
         return templates
