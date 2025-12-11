@@ -8,6 +8,7 @@
     "required_channel_id": 1446529487868002415,
     "summary": "Check in with Celara at the tavern.",
     "details": "Celara wants an update from your adventures. Speak with her to complete this quest.",
+    "allowed_roles": [1447694366243033088],
     "tags": ["social", "npc"]
   },
 
@@ -22,6 +23,7 @@
     "required_channel_id": 1447967417665060985,
     "summary": "Test your skills against the guild's training dummy.",
     "details": "Roll a d20 to see how well you perform in training.",
+    "allowed_roles": [1447694366243033088],
     "tags": ["skill", "training"]
   },
 
@@ -33,6 +35,7 @@
     "required_channel_id": 1446529487868002415,
     "summary": "Drop by the Tavern and check in.",
     "details": "The guild wants to see members active in the hall. Visit the Tavern and check in.",
+    "allowed_roles": [1447694366243033088],
     "tags": ["travel", "social"]
   },
 
@@ -46,6 +49,7 @@
     "turnin_channel_id": 1446511086747779195,
     "summary": "Pick up rumors in the tavern and turn them in at the quest board.",
     "details": "Spend some time listening to chatter in the tavern, then report what you’ve gathered to the guild quest board.",
+    "allowed_roles": [1447694366243033088],
     "tags": ["fetch", "social"]
   }
 }

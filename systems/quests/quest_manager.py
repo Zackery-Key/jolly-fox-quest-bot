@@ -50,32 +50,76 @@ class QuestManager:
             storage.save_players(self.players)
             return True
         return False
+    
 
+    def _template_allowed_for_roles(self, template: QuestTemplate, role_ids: list[int]) -> bool:
+        """
+        Return True if the given quest template can be assigned
+        to a user with the specified role IDs.
+
+        Rules:
+        - If template.allowed_roles is empty → everyone can get it.
+        - Otherwise, user must have at least ONE of the allowed role IDs.
+        """
+        if not template.allowed_roles:
+            return True
+
+        role_set = set(role_ids)
+        return any(role_id in role_set for role_id in template.allowed_roles)
+    
     # -----------------------------------------------------
     # Daily Quest Assignment
     # -----------------------------------------------------
-    def assign_daily(self, user_id):
+    def assign_daily(self, user_id: int, role_ids: list[int]) -> str | None:
+        """
+        Assign a daily quest to the user if they don't already have one today
+        AND there is at least one quest they are allowed to receive based on roles.
+
+        Returns:
+            quest_id (str) if a quest is assigned or already exists for today,
+            None if there are currently no eligible quests for the user's roles.
+        """
         player = self.get_or_create_player(user_id)
         today = str(date.today())
 
-        # Reuse today's quest if already assigned
+        # If a quest is already assigned for today, keep it.
         if player.daily_quest.get("assigned_date") == today:
-            return player.daily_quest["quest_id"]
+            return player.daily_quest.get("quest_id")
 
         # Defensive: no templates loaded
         if not self.quest_templates:
             raise RuntimeError("No quest templates loaded; cannot assign daily quest.")
 
-        # Pick random quest ID
-        quest_id = random.choice(list(self.quest_templates.keys()))
+        # Filter templates by allowed_roles vs user roles
+        eligible_templates: list[QuestTemplate] = []
+        for t in self.quest_templates.values():
+            if self._template_allowed_for_roles(t, role_ids):
+                eligible_templates.append(t)
+
+        # If no eligible quests → no quest today (Option B).
+        # User may try again later in the same day AFTER getting new roles.
+        if not eligible_templates:
+            # Clear any old daily_quest data for safety
+            player.daily_quest = {}
+            storage.save_players(self.players)
+            return None
+
+        # Pick random quest from eligible list
+        chosen = random.choice(eligible_templates)
+        quest_id = chosen.quest_id
+
+        # Store the new daily quest with a role snapshot
         player.daily_quest = {
             "quest_id": quest_id,
             "assigned_date": today,
-            "completed": False
+            "completed": False,
+            # Snapshot of roles at assignment time
+            "role_snapshot": list(role_ids),
         }
 
         storage.save_players(self.players)
         return quest_id
+
 
     # -----------------------------------------------------
     # Completion

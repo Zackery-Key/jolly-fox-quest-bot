@@ -159,7 +159,8 @@ async def refresh_quest_board(bot: commands.Bot):
 # Shared daily quest guard
 # -------------------------
 async def _ensure_active_daily(interaction, expected_type=None, create_if_missing=True):
-    user_id = interaction.user.id
+    user = interaction.user
+    user_id = user.id
 
     if create_if_missing:
         player = quest_manager.get_or_create_player(user_id)
@@ -204,6 +205,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
         )
         return None, None
 
+    # Type check (SKILL/SOCIAL/FETCH/TRAVEL)
     if expected_type is not None and template.type != expected_type:
         await interaction.response.send_message(
             f"❌ Your current quest is `{template.type.value}`, "
@@ -211,6 +213,37 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
             ephemeral=True,
         )
         return None, None
+
+    # -----------------------------------------
+    # NEW: Allowed role enforcement (Option B)
+    # -----------------------------------------
+    allowed_roles = getattr(template, "allowed_roles", []) or []
+
+    # If quest has role restrictions, we enforce them:
+    if allowed_roles:
+        current_roles = {role.id for role in getattr(user, "roles", [])}
+        snapshot = player.daily_quest.get("role_snapshot") or []
+
+        # If they currently have at least one required role → OK
+        if any(rid in current_roles for rid in allowed_roles):
+            pass  # allowed
+        else:
+            # They do NOT currently have allowed roles.
+            # Option B: If they had the role at assignment time, still allow completion.
+            if any(rid in snapshot for rid in allowed_roles):
+                # They were legit when the quest was assigned.
+                pass
+            else:
+                # They never had the required roles for this quest.
+                # This should not happen anymore with the new assignment logic,
+                # but we handle it gracefully.
+                await interaction.response.send_message(
+                    "❌ You don't have the required role to complete this quest.\n"
+                    "If you believe this is a mistake, please contact an admin.\n"
+                    "You will get a new quest tomorrow with `/quest_today`.",
+                    ephemeral=True,
+                )
+                return None, None
 
     return player, template
 
@@ -326,11 +359,26 @@ async def ping(interaction: discord.Interaction):
     description="See your daily Jolly Fox guild quest.",
 )
 async def quest_today(interaction: discord.Interaction):
-    user_id = interaction.user.id
+    user = interaction.user
+    user_id = user.id
 
-    quest_id = quest_manager.assign_daily(user_id)
-    template = quest_manager.get_template(quest_id)
+    # Collect the user's current Discord role IDs
+    role_ids = [role.id for role in getattr(user, "roles", [])]
+
+    quest_id = quest_manager.assign_daily(user_id, role_ids)
     player = quest_manager.get_player(user_id)
+
+    # If no quest is available for current roles
+    if quest_id is None:
+        await interaction.response.send_message(
+            "🦊 There are no quests available for your current roles right now.\n\n"
+            "If you join a new guild faction or RP group later today, "
+            "you can try `/quest_today` again.",
+            ephemeral=True,
+        )
+        return
+
+    template = quest_manager.get_template(quest_id)
 
     if template is None:
         await interaction.response.send_message(

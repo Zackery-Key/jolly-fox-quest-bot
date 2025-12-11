@@ -32,6 +32,7 @@ class QuestTemplate:
     details: str = ""
 
     tags: List[str] = field(default_factory=list)
+    allowed_roles: List[int] = field(default_factory=list)
 
     # ---------------------------
     # SERIALIZATION
@@ -56,11 +57,22 @@ class QuestTemplate:
 
             "summary": self.summary,
             "details": self.details,
-            "tags": self.tags
+            "tags": self.tags,
+            "allowed_roles": self.allowed_roles,
         }
 
     @staticmethod
     def from_dict(data: dict):
+        # Normalize allowed_roles into a list[int]
+        raw_allowed = data.get("allowed_roles", []) or []
+        allowed_roles: List[int] = []
+        for r in raw_allowed:
+            try:
+                allowed_roles.append(int(r))
+            except Exception:
+                # Ignore junk values
+                continue
+            
         return QuestTemplate(
             quest_id=data.get("quest_id"),
             name=data.get("name"),
