@@ -72,7 +72,7 @@ class QuestTemplate:
             except Exception:
                 # Ignore junk values
                 continue
-            
+
         return QuestTemplate(
             quest_id=data.get("quest_id"),
             name=data.get("name"),
@@ -92,5 +92,9 @@ class QuestTemplate:
 
             summary=data.get("summary", ""),
             details=data.get("details", ""),
-            tags=data.get("tags", [])
+            tags=data.get("tags", []),
+
+            # FIX IS HERE:
+            allowed_roles=allowed_roles,
         )
+
