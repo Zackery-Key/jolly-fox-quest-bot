@@ -86,10 +86,14 @@ def load_board() -> QuestBoard:
     board.season_id = raw.get("season_id", "default_season")
     board.global_points = raw.get("global_points", 0)
 
-    # NEW – safe defaults if keys don't exist yet
+    # Safe defaults if keys don't exist yet
     board.faction_points = raw.get("faction_points", {})
     board.display_channel_id = raw.get("display_channel_id")
     board.message_id = raw.get("message_id")
+
+    # NEW
+    board.season_goal = raw.get("season_goal", 100)
+    board.season_reward = raw.get("season_reward", "")
 
     return board
 
@@ -102,6 +106,9 @@ def save_board(board: QuestBoard) -> None:
         "faction_points": board.faction_points,
         "display_channel_id": board.display_channel_id,
         "message_id": board.message_id,
+        # NEW
+        "season_goal": board.season_goal,
+        "season_reward": board.season_reward,
     }
     with open(BOARD_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)

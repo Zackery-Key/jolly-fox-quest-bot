@@ -15,6 +15,10 @@ class QuestBoard:
     # NEW – per-faction scoring
     faction_points: Dict[str, int] = field(default_factory=dict)
 
+    # NEW – seasonal metadata
+    season_goal: int = 100
+    season_reward: str = ""  # e.g. "Custom role + art + one-shot seat"
+
     # Where the quest board embed is posted (for refresh)
     display_channel_id: Optional[int] = None
     message_id: Optional[int] = None
@@ -28,6 +32,8 @@ class QuestBoard:
         self.faction_points[faction_id] = self.faction_points.get(faction_id, 0) + amount
 
     def reset_season(self, new_season_id: str):
+        """Hard reset points for a new season."""
         self.season_id = new_season_id
         self.global_points = 0
         self.faction_points = {}
+        # Leave season_goal / season_reward to be set by admin command
