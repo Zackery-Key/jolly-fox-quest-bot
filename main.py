@@ -30,6 +30,23 @@ async def setup_hook():
     print(f"Setup complete for guild {GUILD_ID}")
 
 # Helpers
+def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
+    """Simple text progress bar for embeds."""
+    if max_value <= 0:
+        max_value = 1
+
+    ratio = value / max_value
+    if ratio < 0:
+        ratio = 0
+    if ratio > 1:
+        ratio = 1
+
+    filled = int(ratio * length)
+    empty = length - filled
+
+    return f"[{'█' * filled}{'░' * empty}]"
+
+
 async def _ensure_active_daily(interaction, expected_type=None, create_if_missing=True):
     """
     Shared guard for daily quest commands.
@@ -103,6 +120,53 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
 
 # Commands
+@bot.tree.command(name="quest_board", description="Show the Jolly Fox seasonal quest scoreboard.")
+async def quest_board(interaction: discord.Interaction):
+    stats = quest_manager.get_scoreboard()
+
+    global_points = stats["global_points"]
+    lifetime_completed = stats["lifetime_completed"]
+    season_completed = stats["season_completed"]
+
+    # You can tweak this goal whenever you want
+    SEASON_GOAL = 100  # e.g., 100 points per season
+
+    progress_bar = make_progress_bar(global_points, SEASON_GOAL)
+
+    embed = discord.Embed(
+        title="🛡️ Jolly Fox Guild Quest Board",
+        description="Seasonal progress for the whole guild.",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(
+        name="📊 Global Guild Points",
+        value=f"{global_points} / {SEASON_GOAL} pts\n{progress_bar}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏆 Quests Completed This Season",
+        value=str(season_completed),
+        inline=True
+    )
+
+    embed.add_field(
+        name="🌟 Lifetime Quests Completed (All Players)",
+        value=str(lifetime_completed),
+        inline=True
+    )
+
+    # Later we can add faction standings here
+
+    embed.set_footer(
+        text="Every completed quest pushes the Jolly Fox further this season."
+    )
+
+    # Public on purpose so it hypes people
+    await interaction.response.send_message(embed=embed)
+
+
 @bot.tree.command(name="quest_admin_reset_user", description="Admin: Reset a user's quest profile completely.")
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
