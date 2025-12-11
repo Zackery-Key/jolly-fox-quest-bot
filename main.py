@@ -264,6 +264,66 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
     return player, template
 
+def validate_quest_data(quests: dict) -> tuple[bool, str]:
+    """Validate quest JSON before import."""
+    from systems.quests.quest_models import QuestType
+
+    for qid, q in quests.items():
+        if not isinstance(q, dict):
+            return False, f"Quest '{qid}' must be an object."
+
+        # Required fields
+        required = ["quest_id", "name", "type"]
+        for field in required:
+            if field not in q:
+                return False, f"Quest '{qid}' missing required field '{field}'."
+
+        # Validate type
+        if q["type"] not in QuestType.__members__:
+            return False, f"Quest '{qid}' has invalid type '{q['type']}'."
+
+        t = q["type"]
+
+        # Type-specific validation
+        if t == "SOCIAL":
+            if "npc_id" not in q:
+                return False, f"Social quest '{qid}' missing npc_id."
+
+        if t == "FETCH":
+            for f in ["item_name", "source_channel_id", "turnin_channel_id"]:
+                if f not in q:
+                    return False, f"Fetch quest '{qid}' missing '{f}'."
+
+        if t == "SKILL":
+            if "dc" not in q or "points_on_success" not in q:
+                return False, f"Skill quest '{qid}' missing dc or points_on_success."
+
+        if t == "TRAVEL":
+            if "required_channel_id" not in q:
+                return False, f"Travel quest '{qid}' missing required_channel_id."
+
+    return True, "OK"
+
+def validate_npc_data(npcs: dict) -> tuple[bool, str]:
+    for npc_id, n in npcs.items():
+        if not isinstance(n, dict):
+            return False, f"NPC '{npc_id}' must be an object."
+
+        if "npc_id" not in n or "name" not in n:
+            return False, f"NPC '{npc_id}' missing npc_id or name."
+
+        # Validate lists/dicts
+        if "greetings" in n and not isinstance(n["greetings"], list):
+            return False, f"NPC '{npc_id}' greetings must be a list."
+
+        if "idle_lines" in n and not isinstance(n.get("idle_lines", []), list):
+            return False, f"NPC '{npc_id}' idle_lines must be a list."
+
+        if "quest_dialogue" in n and not isinstance(n["quest_dialogue"], dict):
+            return False, f"NPC '{npc_id}' quest_dialogue must be a dict."
+
+    return True, "OK"
+
 
 
 # =========================
@@ -469,7 +529,11 @@ async def quest_import(interaction: discord.Interaction, file: discord.Attachmen
         new_data = json.loads(raw_bytes.decode("utf-8"))
     except Exception as e:
         return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
-
+        
+    valid, msg = validate_quest_data(new_data)
+    if not valid:
+        return await interaction.response.send_message(f"❌ Import failed: {msg}", ephemeral=True)
+    
     # Load existing quests.json
     try:
         with open(QUESTS_FILE, "r", encoding="utf-8") as f:
@@ -785,14 +849,11 @@ async def npc_import(
         new_data = json.loads(raw_bytes.decode("utf-8"))
     except Exception as e:
         return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
-
-    # Validate NPC structure
-    for npc_id, npc in new_data.items():
-        if "name" not in npc:
-            return await interaction.response.send_message(
-                f"❌ NPC '{npc_id}' missing 'name' field.", ephemeral=True
-            )
-
+    
+    valid, msg = validate_npc_data(new_data)
+    if not valid:
+        return await interaction.response.send_message(f"❌ Import failed: {msg}", ephemeral=True)
+        
     # Load existing NPCs
     current = storage.load_npcs()
 

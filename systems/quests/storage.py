@@ -135,9 +135,22 @@ def load_npcs() -> Dict[str, NPC]:
     return npcs
 
 
-def save_npcs(npc_dict: Dict[str, NPC]) -> None:
-    """Save all NPCs to JSON."""
-    raw = {npc_id: npc.to_dict() for npc_id, npc in npc_dict.items()}
+def save_npcs(npc_dict: Dict[str, object]) -> None:
+    """Save NPCs to JSON. Supports NPC objects and raw dict structures."""
+    raw = {}
+
+    for npc_id, npc in npc_dict.items():
+        # NPC object
+        if hasattr(npc, "to_dict"):
+            raw[npc_id] = npc.to_dict()
+
+        # Raw dict (import)
+        elif isinstance(npc, dict):
+            raw[npc_id] = npc
+
+        else:
+            raise TypeError(f"NPC '{npc_id}' is not dict or NPC object")
+
     with open(NPCS_FILE, "w", encoding="utf-8") as f:
         json.dump(raw, f, indent=4)
 
