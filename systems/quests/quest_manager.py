@@ -8,6 +8,7 @@ from .player_state import PlayerState
 
 class QuestManager:
     def __init__(self):
+        # Load all dynamic data via storage layer
         self.quest_templates = storage.load_templates()
         self.npcs = storage.load_npcs()
         self.players = storage.load_players()
@@ -27,7 +28,7 @@ class QuestManager:
         return self.npcs.get(npc_id)
 
     # -----------------------------------------------------
-    # Player access
+    # Player access / management
     # -----------------------------------------------------
     def get_player(self, user_id):
         return self.players.get(user_id)
@@ -38,6 +39,18 @@ class QuestManager:
             storage.save_players(self.players)
         return self.players[user_id]
 
+    def save_players(self):
+        """Persist all current players."""
+        storage.save_players(self.players)
+
+    def clear_player(self, user_id):
+        """Remove a player's data entirely."""
+        if user_id in self.players:
+            del self.players[user_id]
+            storage.save_players(self.players)
+            return True
+        return False
+
     # -----------------------------------------------------
     # Daily Quest Assignment
     # -----------------------------------------------------
@@ -45,8 +58,13 @@ class QuestManager:
         player = self.get_or_create_player(user_id)
         today = str(date.today())
 
+        # Reuse today's quest if already assigned
         if player.daily_quest.get("assigned_date") == today:
             return player.daily_quest["quest_id"]
+
+        # Defensive: no templates loaded
+        if not self.quest_templates:
+            raise RuntimeError("No quest templates loaded; cannot assign daily quest.")
 
         # Pick random quest ID
         quest_id = random.choice(list(self.quest_templates.keys()))
@@ -85,6 +103,13 @@ class QuestManager:
 
         storage.save_players(self.players)
         return True
+
+    # -----------------------------------------------------
+    # Quest Board
+    # -----------------------------------------------------
+    def save_board(self):
+        """Persist the quest board."""
+        storage.save_board(self.quest_board)
 
     # -----------------------------------------------------
     # Scoreboard
