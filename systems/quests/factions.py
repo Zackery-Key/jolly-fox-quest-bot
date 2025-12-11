@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import Dict, Optional
+
 
 @dataclass
 class Faction:
@@ -7,7 +9,8 @@ class Faction:
     emoji: str
     description: str
 
-FACTIONS = {
+
+FACTIONS: Dict[str, Faction] = {
     "shieldborne": Faction(
         faction_id="shieldborne",
         name="Shieldborne Order",
@@ -28,5 +31,8 @@ FACTIONS = {
     ),
 }
 
-def get_faction(faction_id: str):
-    return FACTIONS.get(str(faction_id).lower())
+
+def get_faction(faction_id: str) -> Optional[Faction]:
+    if not faction_id:
+        return None
+    return FACTIONS.get(faction_id.lower())

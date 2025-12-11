@@ -1,10 +1,11 @@
 import os
+import random
 import discord
 from discord.ext import commands
-import random
-from systems.quests.quest_models import QuestType
 
-from systems.quests.factions import FACTIONS, get_faction  # you already have this
+from systems.quests.quest_manager import QuestManager
+from systems.quests.quest_models import QuestType
+from systems.quests.factions import get_faction   # 👈 important
 
 # --- Faction role mapping (replace with your real IDs) ---
 SHIELDBORNE_ROLE_ID = 1447646082459762761  # TODO: put Shieldborne role ID here
@@ -707,6 +708,46 @@ async def quest_profile(interaction: discord.Interaction):
     lines.append(f"• Seasonal Quests Completed: **{player.season_completed}**")
     lines.append("")
 
+    # -----------------------------
+    # DAILY QUEST INFO
+    # -----------------------------
+    if not daily:
+        lines.append("**Daily Quest:** None assigned yet.")
+        lines.append("Use `/quest_today` to receive today’s quest.\n")
+    else:
+        quest_id = daily.get("quest_id")
+        template = quest_manager.get_template(quest_id)
+        completed = daily.get("completed", False)
+        status_icon = "✅" if completed else "🟠"
+
+        if template:
+            lines.append(f"**Daily Quest:** {status_icon} {template.name}")
+            lines.append(f"• Type: `{template.type}`")
+            lines.append(f"• Summary: {template.summary}")
+        else:
+            lines.append(f"**Daily Quest:** Template missing for `{quest_id}`")
+
+        lines.append("")
+
+    # -----------------------------
+    # INVENTORY
+    # -----------------------------
+    if player.inventory:
+        lines.append("**Inventory (quest items):**")
+        for item in player.inventory:
+            lines.append(f"• `{item.quest_id}` — {item.item_name}")
+    else:
+        lines.append("**Inventory:** Empty")
+
+    lines.append("")
+
+    # -----------------------------
+    # GLOBAL QUEST BOARD STATUS
+    # -----------------------------
+    board_points = quest_manager.quest_board.global_points
+    lines.append(f"**Guild Quest Board (season):** {board_points} points")
+
+    await interaction.response.send_message("\n".join(lines))
 
 
 # Sync
