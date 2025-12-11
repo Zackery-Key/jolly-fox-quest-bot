@@ -503,28 +503,42 @@ async def quest_import(
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_export",description="ADMIN: Export current quest JSON file.")
-async def quest_export(interaction: discord.Interaction):
+@bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).")
+async def quest_import(interaction: discord.Interaction, file: discord.Attachment, mode: str = "overwrite"):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
-    from systems.quests import storage
-    import discord
     import json
+    from systems.quests.storage import QUESTS_FILE
+    from systems.quests import quest_manager
 
-    quests = storage.load_quests()
-    content = json.dumps(quests, indent=4)
+    if mode not in ("overwrite", "merge"):
+        return await interaction.response.send_message("❌ Mode must be overwrite or merge.", ephemeral=True)
 
-    buffer = io.BytesIO(content.encode("utf-8"))
+    try:
+        raw_bytes = await file.read()
+        new_data = json.loads(raw_bytes.decode("utf-8"))
+    except Exception as e:
+        return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
 
-    file = discord.File(
-        fp=buffer,
-        filename="quests_export.json"
-    )
+    # Load existing quests.json
+    try:
+        with open(QUESTS_FILE, "r", encoding="utf-8") as f:
+            current = json.load(f)
+    except:
+        current = {}
+
+    final_data = new_data if mode == "overwrite" else {**current, **new_data}
+
+    # Save updated quests.json
+    with open(QUESTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(final_data, f, indent=4)
+
+    # Reload templates into memory
+    quest_manager.load_templates()
 
     await interaction.response.send_message(
-        content="📦 Quest export file:",
-        file=file,
+        f"🟢 Quest import complete! Mode: **{mode}**\nImported **{len(new_data)}** quest(s).",
         ephemeral=True
     )
 
