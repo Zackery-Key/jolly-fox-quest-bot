@@ -677,6 +677,36 @@ async def quest_admin_remove_npc(
         ephemeral=True,
     )
 
+@bot.tree.command(name="quest_admin_delete_all_players",description="ADMIN: Deletes ALL player profiles from persistent storage. Use with caution!")
+async def quest_admin_delete_all_players(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return
+
+    try:
+        import os
+        from systems.quests import storage
+
+        # Delete the file if it exists
+        if os.path.exists(storage.PLAYERS_FILE):
+            os.remove(storage.PLAYERS_FILE)
+        
+        # Recreate an empty file so the bot doesn't crash
+        with open(storage.PLAYERS_FILE, "w", encoding="utf-8") as f:
+            f.write("{}")
+
+        # Clear runtime memory too
+        quest_manager.players = {}
+
+        await interaction.response.send_message(
+            "🗑️ All player profiles deleted from persistent storage.\n"
+            "They will regenerate cleanly as users run /quest_today.",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.response.send_message(f"⚠️ Error: {e}", ephemeral=True)
+
 
 #ADMIN Board
 @bot.tree.command(name="quest_admin_set_season",description="Admin: Start a new season and set goal/reward text.",)
