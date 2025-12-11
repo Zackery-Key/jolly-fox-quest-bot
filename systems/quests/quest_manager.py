@@ -3,19 +3,17 @@ from datetime import date
 
 from . import storage
 from .quest_models import QuestTemplate, QuestType
-from .npc_models import NPC
-from .player_state import PlayerState
-from .quest_board import QuestBoard
 
 
 class QuestManager:
     def __init__(self):
-        # Load all dynamic data via storage layer
         self.quest_templates = storage.load_templates()
         self.npcs = storage.load_npcs()
         self.players = storage.load_players()
         self.quest_board = storage.load_board()
 
+        print(f"Loaded {len(self.quest_templates)} quest templates.")
+        print(f"Loaded {len(self.npcs)} NPCs.")
         print("QuestManager Initialized")
 
     # -----------------------------------------------------
@@ -30,34 +28,14 @@ class QuestManager:
     # -----------------------------------------------------
     # Player access
     # -----------------------------------------------------
-    def get_player(self, user_id: int):
+    def get_player(self, user_id):
         return self.players.get(user_id)
 
-    def get_or_create_player(self, user_id: int):
+    def get_or_create_player(self, user_id):
         if user_id not in self.players:
             self.players[user_id] = PlayerState(user_id=user_id)
             storage.save_players(self.players)
         return self.players[user_id]
-
-    # -----------------------------------------------------
-    # Player cleaning
-    # -----------------------------------------------------
-    def clear_player(self, user_id: int) -> bool:
-        if user_id in self.players:
-            del self.players[user_id]
-            storage.save_players(self.players)
-            return True
-        return False
-
-    def clear_all_players(self):
-        self.players = {}
-        storage.save_players(self.players)
-
-    # -----------------------------------------------------
-    # Quest Board persistence
-    # -----------------------------------------------------
-    def save_board(self):
-        storage.save_board(self.quest_board)
 
     # -----------------------------------------------------
     # Daily Quest Assignment
@@ -69,6 +47,7 @@ class QuestManager:
         if player.daily_quest.get("assigned_date") == today:
             return player.daily_quest["quest_id"]
 
+        # Pick random quest ID
         quest_id = random.choice(list(self.quest_templates.keys()))
         player.daily_quest = {
             "quest_id": quest_id,
@@ -80,7 +59,7 @@ class QuestManager:
         return quest_id
 
     # -----------------------------------------------------
-    # Quest Completion
+    # Completion
     # -----------------------------------------------------
     def complete_daily(self, user_id):
         player = self.get_or_create_player(user_id)
@@ -105,3 +84,15 @@ class QuestManager:
 
         storage.save_players(self.players)
         return True
+
+    # -----------------------------------------------------
+    # Scoreboard
+    # -----------------------------------------------------
+    def get_scoreboard(self):
+        total_lifetime = sum(p.lifetime_completed for p in self.players.values())
+        total_season = sum(p.season_completed for p in self.players.values())
+        return {
+            "global_points": self.quest_board.global_points,
+            "lifetime_completed": total_lifetime,
+            "season_completed": total_season
+        }
