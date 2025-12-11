@@ -3,6 +3,7 @@ from datetime import date
 
 from . import storage
 from .quest_models import QuestTemplate, QuestType
+from .player_state import PlayerState
 
 
 class QuestManager:
