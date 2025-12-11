@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Dict
 
 
 @dataclass
@@ -22,14 +22,11 @@ class PlayerState:
     level: int = 1
 
     # -----------------------------------------------------
-    # Inventory Helpers (needed for FETCH quests)
+    # Inventory Helpers (FETCH quest support)
     # -----------------------------------------------------
     def has_item_for_quest(self, quest_id: str) -> bool:
         """Return True if the player has collected the item for the given quest."""
-        return any(
-            item.quest_id == quest_id and item.collected
-            for item in self.inventory
-        )
+        return any(item.quest_id == quest_id and item.collected for item in self.inventory)
 
     def add_item(self, quest_id: str, item_name: str):
         """Add an item to the player's quest inventory."""
@@ -47,6 +44,48 @@ class PlayerState:
             item for item in self.inventory
             if not (item.quest_id == quest_id and item.collected)
         ]
+
+    # -----------------------------------------------------
+    # Leveling System
+    # -----------------------------------------------------
+    @property
+    def next_level_xp(self) -> int:
+        """
+        How much XP is required to reach the next level.
+        Simple, scalable curve: 20 XP * current level.
+        Level 1 → 20 XP
+        Level 2 → 40 XP
+        Level 3 → 60 XP
+        Etc.
+        """
+        return self.level * 20
+
+    @property
+    def xp_progress(self) -> float:
+        """
+        Return a float between 0 and 1 representing XP progress.
+        Safe for division-by-zero.
+        """
+        needed = self.next_level_xp
+        if needed <= 0:
+            return 0.0
+        return min(self.xp / needed, 1.0)
+
+    def add_xp(self, amount: int) -> bool:
+        """
+        Add XP and return True if the player leveled up.
+        Level-ups can chain (e.g., huge XP reward).
+        """
+        leveled_up = False
+        self.xp += amount
+
+        # Loop in case multiple levels gained
+        while self.xp >= self.next_level_xp:
+            self.xp -= self.next_level_xp
+            self.level += 1
+            leveled_up = True
+
+        return leveled_up
 
     # -----------------------------------------------------
     # Serialization → JSON
