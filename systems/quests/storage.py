@@ -74,7 +74,6 @@ def delete_player(user_id: int) -> None:
 # =================================================
 
 def load_board() -> QuestBoard:
-    """Load global quest board (single document)."""
     board = QuestBoard()
 
     if not os.path.exists(BOARD_FILE):
@@ -85,8 +84,8 @@ def load_board() -> QuestBoard:
 
     board.season_id = raw.get("season_id", "default_season")
     board.global_points = raw.get("global_points", 0)
+    board.faction_points = raw.get("faction_points", {})
 
-    # NEW: where the board is displayed
     board.display_channel_id = raw.get("display_channel_id")
     board.message_id = raw.get("message_id")
 
@@ -94,10 +93,10 @@ def load_board() -> QuestBoard:
 
 
 def save_board(board: QuestBoard) -> None:
-    """Persist global quest board."""
     data = {
         "season_id": board.season_id,
         "global_points": board.global_points,
+        "faction_points": board.faction_points,
         "display_channel_id": board.display_channel_id,
         "message_id": board.message_id,
     }
