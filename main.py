@@ -1,10 +1,11 @@
 import os
+import random
 import discord
 from discord.ext import commands
-import random
-from systems.quests.quest_models import QuestType
 
-from systems.quests.factions import FACTIONS, get_faction  # you already have this
+from systems.quests.quest_manager import QuestManager
+from systems.quests.quest_models import QuestType
+from systems.quests.factions import get_faction   # 👈 important
 
 # --- Faction role mapping (replace with your real IDs) ---
 SHIELDBORNE_ROLE_ID = 1447646082459762761  # TODO: put Shieldborne role ID here
@@ -72,21 +73,23 @@ def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
 
     return f"[{'█' * filled}{'░' * empty}]"
 
-async def refresh_quest_board(bot):
+async def refresh_quest_board(bot: commands.Bot):
     """Update the existing quest board message if we have one saved."""
     board = quest_manager.quest_board
 
+    # No board message saved yet
     if not board.display_channel_id or not board.message_id:
-        return  # No board created yet
+        return
 
     try:
+        # Get channel + message
         channel = bot.get_channel(board.display_channel_id)
         if channel is None:
             channel = await bot.fetch_channel(board.display_channel_id)
 
         msg = await channel.fetch_message(board.message_id)
 
-        # Generate a fresh embed
+        # ----- Build fresh stats -----
         stats = quest_manager.get_scoreboard()
         global_points = stats["global_points"]
         lifetime_completed = stats["lifetime_completed"]
@@ -101,21 +104,51 @@ async def refresh_quest_board(bot):
             color=discord.Color.gold()
         )
 
+        # Global progress
         embed.add_field(
             name="📊 Global Guild Points",
             value=f"{global_points} / {SEASON_GOAL} pts\n{progress_bar}",
             inline=False
         )
 
+        # -----------------------------
+        # FACTION STANDINGS (with crown)
+        # -----------------------------
+        faction_points = board.faction_points or {}
+        faction_lines: list[str] = []
+
+        # Highest score (may be 0)
+        max_pts = 0
+        if faction_points:
+            max_pts = max(faction_points.values())
+
+        # Factions tied for 1st
+        leaders: list[str] = []
+        for faction_id, fac in FACTIONS.items():
+            pts = faction_points.get(faction_id, 0)
+            if pts == max_pts and max_pts > 0:
+                leaders.append(faction_id)
+
+        # Build lines
+        for faction_id, fac in FACTIONS.items():
+            pts = faction_points.get(faction_id, 0)
+            is_leader = faction_id in leaders
+            crown = " 👑" if is_leader else ""
+            faction_lines.append(
+                f"{fac.emoji} **{fac.name}**{crown} — `{pts}` pts"
+            )
+
+        if faction_lines:
+            embed.add_field(
+                name="⚔️ Faction Standings",
+                value="\n".join(faction_lines),
+                inline=False
+            )
+
+        # Quest counts
         embed.add_field(
             name="🏆 Quests Completed This Season",
             value=str(season_completed),
-            inline=True
-        )
-
-        embed.add_field(
-            name="🌟 Lifetime Quests Completed (All Players)",
-            value=str(lifetime_completed),
             inline=True
         )
 
@@ -123,6 +156,7 @@ async def refresh_quest_board(bot):
             text="Every completed quest pushes the Jolly Fox further this season."
         )
 
+        # Finally, edit the existing message
         await msg.edit(embed=embed)
 
     except Exception as e:
@@ -201,7 +235,10 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
 
 # Commands
-@bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.")
+@bot.tree.command(
+    name="quest_board",
+    description="Show or update the Jolly Fox seasonal quest scoreboard."
+)
 async def quest_board(interaction: discord.Interaction):
     stats = quest_manager.get_scoreboard()
 
@@ -209,7 +246,7 @@ async def quest_board(interaction: discord.Interaction):
     lifetime_completed = stats["lifetime_completed"]
     season_completed = stats["season_completed"]
 
-    SEASON_GOAL = 100  # you can tweak this anytime
+    SEASON_GOAL = 100  # tweak whenever you like
     progress_bar = make_progress_bar(global_points, SEASON_GOAL)
 
     embed = discord.Embed(
@@ -218,12 +255,49 @@ async def quest_board(interaction: discord.Interaction):
         color=discord.Color.gold()
     )
 
+    # Global progress
     embed.add_field(
         name="📊 Global Guild Points",
         value=f"{global_points} / {SEASON_GOAL} pts\n{progress_bar}",
         inline=False
     )
 
+    # -----------------------------
+    # FACTION STANDINGS (with crown)
+    # -----------------------------
+    board = quest_manager.quest_board
+    faction_points = board.faction_points or {}
+    faction_lines: list[str] = []
+
+    # Determine highest score (may be 0)
+    max_pts = 0
+    if faction_points:
+        max_pts = max(faction_points.values())
+
+    # Determine which factions are tied for 1st
+    leaders: list[str] = []
+    for faction_id, fac in FACTIONS.items():
+        pts = faction_points.get(faction_id, 0)
+        if pts == max_pts and max_pts > 0:
+            leaders.append(faction_id)
+
+    # Build formatted lines
+    for faction_id, fac in FACTIONS.items():
+        pts = faction_points.get(faction_id, 0)
+        is_leader = faction_id in leaders
+        crown = " 👑" if is_leader else ""
+        faction_lines.append(
+            f"{fac.emoji} **{fac.name}**{crown} — `{pts}` pts"
+        )
+
+    if faction_lines:
+        embed.add_field(
+            name="⚔️ Faction Standings",
+            value="\n".join(faction_lines),
+            inline=False
+        )
+
+    # Quest counts
     embed.add_field(
         name="🏆 Quests Completed This Season",
         value=str(season_completed),
@@ -240,10 +314,9 @@ async def quest_board(interaction: discord.Interaction):
         text="Every completed quest pushes the Jolly Fox further this season."
     )
 
-    board = quest_manager.quest_board
+    # Try to reuse existing board message if we know where it is
     updated_existing = False
 
-    # Try to edit existing board message if we know where it lives
     if board.display_channel_id and board.message_id:
         channel = interaction.client.get_channel(board.display_channel_id)
         try:
@@ -254,8 +327,7 @@ async def quest_board(interaction: discord.Interaction):
             await msg.edit(embed=embed)
             updated_existing = True
         except Exception:
-            # message/channel might have been deleted; fall back to creating a new one
-            updated_existing = False
+            updated_existing = False  # message/channel gone, fall through
 
     if not updated_existing:
         # Create a new PUBLIC board message in the current channel
@@ -266,7 +338,6 @@ async def quest_board(interaction: discord.Interaction):
         board.message_id = msg.id
         quest_manager.save_board()
     else:
-        # We updated the existing pinned board; give a quiet thumbs-up
         await interaction.response.send_message(
             "🔄 Updated the existing quest board message.",
             ephemeral=True
@@ -707,6 +778,46 @@ async def quest_profile(interaction: discord.Interaction):
     lines.append(f"• Seasonal Quests Completed: **{player.season_completed}**")
     lines.append("")
 
+    # -----------------------------
+    # DAILY QUEST INFO
+    # -----------------------------
+    if not daily:
+        lines.append("**Daily Quest:** None assigned yet.")
+        lines.append("Use `/quest_today` to receive today’s quest.\n")
+    else:
+        quest_id = daily.get("quest_id")
+        template = quest_manager.get_template(quest_id)
+        completed = daily.get("completed", False)
+        status_icon = "✅" if completed else "🟠"
+
+        if template:
+            lines.append(f"**Daily Quest:** {status_icon} {template.name}")
+            lines.append(f"• Type: `{template.type}`")
+            lines.append(f"• Summary: {template.summary}")
+        else:
+            lines.append(f"**Daily Quest:** Template missing for `{quest_id}`")
+
+        lines.append("")
+
+    # -----------------------------
+    # INVENTORY
+    # -----------------------------
+    if player.inventory:
+        lines.append("**Inventory (quest items):**")
+        for item in player.inventory:
+            lines.append(f"• `{item.quest_id}` — {item.item_name}")
+    else:
+        lines.append("**Inventory:** Empty")
+
+    lines.append("")
+
+    # -----------------------------
+    # GLOBAL QUEST BOARD STATUS
+    # -----------------------------
+    board_points = quest_manager.quest_board.global_points
+    lines.append(f"**Guild Quest Board (season):** {board_points} points")
+
+    await interaction.response.send_message("\n".join(lines))
 
 
 # Sync
