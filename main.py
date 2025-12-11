@@ -2,6 +2,7 @@ import os
 import random
 import discord
 from discord.ext import commands
+import io
 
 from systems.quests.quest_manager import QuestManager
 from systems.quests.quest_models import QuestType, QuestTemplate
@@ -823,11 +824,13 @@ async def npc_export(interaction: discord.Interaction):
     serializable = {npc_id: npc.to_dict() for npc_id, npc in npcs.items()}
     content = json.dumps(serializable, indent=4)
 
+    buffer = io.BytesIO(content.encode("utf-8"))
 
     file = discord.File(
-        fp=bytes(content, "utf-8"),
+        fp=buffer,
         filename="npcs_export.json"
     )
+
 
     await interaction.response.send_message(
         content="📦 NPC export file:",
