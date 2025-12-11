@@ -1,49 +1,40 @@
 from dataclasses import dataclass, field
-from typing import List, Dict
-
-
-@dataclass
-class InventoryItem:
-    quest_id: str
-    item_name: str
-    collected: bool = True
+from typing import Dict
 
 
 @dataclass
 class PlayerState:
     user_id: int
     daily_quest: dict = field(default_factory=dict)
-    inventory: List[InventoryItem] = field(default_factory=list)
 
-    # REQUIRED FIELD (needed for faction scoring, quest profile, scoreboard)
+    # Inventory is a dict: {item_name: quantity}
+    inventory: Dict[str, int] = field(default_factory=dict)
+
     faction_id: str | None = None
-
-    # NEW STATS
     lifetime_completed: int = 0
     season_completed: int = 0
     xp: int = 0
     level: int = 1
 
+
     # -----------------------------------------------------
     # Inventory Helpers (FETCH quest support)
     # -----------------------------------------------------
-    def has_item_for_quest(self, quest_id: str) -> bool:
-        return any(item.quest_id == quest_id and item.collected for item in self.inventory)
+    def has_item_for_quest(self, item_name: str) -> bool:
+        """Return True if player has at least 1 of the item."""
+        return self.inventory.get(item_name, 0) > 0
 
-    def add_item(self, quest_id: str, item_name: str):
-        self.inventory.append(
-            InventoryItem(
-                quest_id=quest_id,
-                item_name=item_name,
-                collected=True
-            )
-        )
+    def add_item(self, item_name: str):
+        """Give the player 1 copy of an item."""
+        self.inventory[item_name] = self.inventory.get(item_name, 0) + 1
 
-    def consume_item_for_quest(self, quest_id: str):
-        self.inventory = [
-            item for item in self.inventory
-            if not (item.quest_id == quest_id and item.collected)
-        ]
+    def consume_item(self, item_name: str):
+        """Remove 1 copy of an item."""
+        if item_name in self.inventory:
+            self.inventory[item_name] -= 1
+            if self.inventory[item_name] <= 0:
+                del self.inventory[item_name]
+
 
     # -----------------------------------------------------
     # Leveling System
@@ -68,6 +59,7 @@ class PlayerState:
 
         return leveled
 
+
     # -----------------------------------------------------
     # Serialization → JSON
     # -----------------------------------------------------
@@ -75,14 +67,7 @@ class PlayerState:
         return {
             "user_id": self.user_id,
             "daily_quest": self.daily_quest,
-            "inventory": [
-                {
-                    "quest_id": item.quest_id,
-                    "item_name": item.item_name,
-                    "collected": item.collected
-                }
-                for item in self.inventory
-            ],
+            "inventory": self.inventory,        # dict saved cleanly
             "faction_id": self.faction_id,
             "lifetime_completed": self.lifetime_completed,
             "season_completed": self.season_completed,
@@ -90,31 +75,19 @@ class PlayerState:
             "level": self.level,
         }
 
+
     # -----------------------------------------------------
     # Load from JSON
     # -----------------------------------------------------
     @staticmethod
     def from_dict(data: dict):
-        ps = PlayerState(
+        return PlayerState(
             user_id=data.get("user_id", 0),
             daily_quest=data.get("daily_quest", {}),
+            inventory=data.get("inventory", {}),  # dict loads cleanly
+            faction_id=data.get("faction_id"),
+            lifetime_completed=data.get("lifetime_completed", 0),
+            season_completed=data.get("season_completed", 0),
+            xp=data.get("xp", 0),
+            level=data.get("level", 1),
         )
-
-        # Load stats safely
-        ps.faction_id = data.get("faction_id")  # <-- RESTORED
-        ps.lifetime_completed = data.get("lifetime_completed", 0)
-        ps.season_completed = data.get("season_completed", 0)
-        ps.xp = data.get("xp", 0)
-        ps.level = data.get("level", 1)
-
-        # Load inventory
-        for item in data.get("inventory", []):
-            ps.inventory.append(
-                InventoryItem(
-                    quest_id=item.get("quest_id"),
-                    item_name=item.get("item_name"),
-                    collected=item.get("collected", True)
-                )
-            )
-
-        return ps

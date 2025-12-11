@@ -1047,7 +1047,7 @@ async def quest_fetch(interaction: discord.Interaction):
 
     quest_id = player.daily_quest.get("quest_id")
 
-    if player.has_item_for_quest(quest_id):
+    if player.has_item_for_quest(template.item_name):
         await interaction.response.send_message(
             "📦 You've already gathered this quest item. "
             "Head to the quest board and use `/quest_turnin`.",
@@ -1056,7 +1056,7 @@ async def quest_fetch(interaction: discord.Interaction):
         return
 
     item_name = template.item_name or "Quest Item"
-    player.add_item(quest_id, item_name)
+    player.add_item(item_name)
     quest_manager.save_players()
 
     turnin_channel = template.turnin_channel_id or 0
@@ -1089,7 +1089,7 @@ async def quest_turnin(interaction: discord.Interaction):
 
     quest_id = player.daily_quest.get("quest_id")
 
-    if not player.has_item_for_quest(quest_id):
+    if not player.has_item_for_quest(template.item_name):
         await interaction.response.send_message(
             "❌ You don't have the required quest item yet. "
             "Use `/quest_fetch` in the correct channel first.",
@@ -1097,7 +1097,7 @@ async def quest_turnin(interaction: discord.Interaction):
         )
         return
 
-    player.consume_item_for_quest(quest_id)
+    player.consume_item(template.item_name)
     quest_manager.save_players()
 
     quest_manager.complete_daily(interaction.user.id)
@@ -1158,14 +1158,17 @@ async def quest_profile(interaction: discord.Interaction):
 
     # Inventory formatting
     if player.inventory:
-        inv_lines = [f"- **{item}** × {qty}" for item, qty in player.inventory.items()]
+        inv_lines = [f"- **{name}** × {qty}" for name, qty in player.inventory.items()]
         inv_text = "\n".join(inv_lines)
     else:
         inv_text = "_Empty_"
 
+
     # Seasonal stats
     lifetime = player.lifetime_completed
-    seasonal = player.seasonal_completed
+    seasonal = player.season_completed
+
+
 
     # --- Build Embed ---
     embed = discord.Embed(
