@@ -4,13 +4,18 @@ from typing import Dict, Optional
 
 @dataclass
 class QuestBoard:
+    """
+    Seasonal quest board tracker.
+    Tracks global + per-faction points for the guild,
+    and remembers where the scoreboard message lives.
+    """
     season_id: str = "default_season"
     global_points: int = 0
 
-    # NEW — per-faction scoring
+    # NEW – per-faction scoring
     faction_points: Dict[str, int] = field(default_factory=dict)
 
-    # Where the scoreboard message lives (for refresh)
+    # Where the quest board embed is posted (for refresh)
     display_channel_id: Optional[int] = None
     message_id: Optional[int] = None
 
@@ -18,9 +23,8 @@ class QuestBoard:
         self.global_points += amount
 
     def add_faction_points(self, faction_id: str, amount: int):
-        """Increase points for a specific faction."""
         if not faction_id:
-            return  # no faction → no faction bucket
+            return
         self.faction_points[faction_id] = self.faction_points.get(faction_id, 0) + amount
 
     def reset_season(self, new_season_id: str):
