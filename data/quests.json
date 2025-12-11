@@ -23,7 +23,7 @@
     "required_channel_id": 1447967417665060985,
     "summary": "Test your skills against the guild's training dummy.",
     "details": "Roll a d20 to see how well you perform in training.",
-    "allowed_roles": [1447694366243033088],
+    "allowed_roles": [],
     "tags": ["skill", "training"]
   },
 
