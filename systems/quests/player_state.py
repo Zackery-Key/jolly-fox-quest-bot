@@ -15,6 +15,9 @@ class PlayerState:
     daily_quest: dict = field(default_factory=dict)
     inventory: List[InventoryItem] = field(default_factory=list)
 
+    # REQUIRED FIELD (needed for faction scoring, quest profile, scoreboard)
+    faction_id: str | None = None
+
     # NEW STATS
     lifetime_completed: int = 0
     season_completed: int = 0
@@ -25,11 +28,9 @@ class PlayerState:
     # Inventory Helpers (FETCH quest support)
     # -----------------------------------------------------
     def has_item_for_quest(self, quest_id: str) -> bool:
-        """Return True if the player has collected the item for the given quest."""
         return any(item.quest_id == quest_id and item.collected for item in self.inventory)
 
     def add_item(self, quest_id: str, item_name: str):
-        """Add an item to the player's quest inventory."""
         self.inventory.append(
             InventoryItem(
                 quest_id=quest_id,
@@ -39,7 +40,6 @@ class PlayerState:
         )
 
     def consume_item_for_quest(self, quest_id: str):
-        """Remove the quest item from inventory after turn-in."""
         self.inventory = [
             item for item in self.inventory
             if not (item.quest_id == quest_id and item.collected)
@@ -50,48 +50,28 @@ class PlayerState:
     # -----------------------------------------------------
     @property
     def next_level_xp(self) -> int:
-        """
-        How much XP is required to reach the next level.
-        Simple, scalable curve: 20 XP * current level.
-        Level 1 → 20 XP
-        Level 2 → 40 XP
-        Level 3 → 60 XP
-        Etc.
-        """
         return self.level * 20
 
     @property
     def xp_progress(self) -> float:
-        """
-        Return a float between 0 and 1 representing XP progress.
-        Safe for division-by-zero.
-        """
         needed = self.next_level_xp
-        if needed <= 0:
-            return 0.0
-        return min(self.xp / needed, 1.0)
+        return min(self.xp / needed, 1.0) if needed > 0 else 0.0
 
     def add_xp(self, amount: int) -> bool:
-        """
-        Add XP and return True if the player leveled up.
-        Level-ups can chain (e.g., huge XP reward).
-        """
-        leveled_up = False
+        leveled = False
         self.xp += amount
 
-        # Loop in case multiple levels gained
         while self.xp >= self.next_level_xp:
             self.xp -= self.next_level_xp
             self.level += 1
-            leveled_up = True
+            leveled = True
 
-        return leveled_up
+        return leveled
 
     # -----------------------------------------------------
     # Serialization → JSON
     # -----------------------------------------------------
     def to_dict(self):
-        """Convert PlayerState to JSON-compatible dict."""
         return {
             "user_id": self.user_id,
             "daily_quest": self.daily_quest,
@@ -103,6 +83,7 @@ class PlayerState:
                 }
                 for item in self.inventory
             ],
+            "faction_id": self.faction_id,
             "lifetime_completed": self.lifetime_completed,
             "season_completed": self.season_completed,
             "xp": self.xp,
@@ -116,10 +97,11 @@ class PlayerState:
     def from_dict(data: dict):
         ps = PlayerState(
             user_id=data.get("user_id", 0),
-            daily_quest=data.get("daily_quest", {})
+            daily_quest=data.get("daily_quest", {}),
         )
 
         # Load stats safely
+        ps.faction_id = data.get("faction_id")  # <-- RESTORED
         ps.lifetime_completed = data.get("lifetime_completed", 0)
         ps.season_completed = data.get("season_completed", 0)
         ps.xp = data.get("xp", 0)
