@@ -27,6 +27,12 @@ class QuestManager:
     def get_npc(self, npc_id):
         return self.npcs.get(npc_id)
 
+    def reload_templates(self):
+        """Reload quest templates after import."""
+        self.quest_templates = storage.load_templates()
+        print(f"Reloaded {len(self.quest_templates)} quest templates.")
+
+
     # -----------------------------------------------------
     # Player access / management
     # -----------------------------------------------------

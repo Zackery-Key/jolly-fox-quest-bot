@@ -519,7 +519,6 @@ async def quest_import(interaction: discord.Interaction, file: discord.Attachmen
 
     import json
     from systems.quests.storage import QUESTS_FILE
-    from systems.quests import quest_manager
 
     if mode not in ("overwrite", "merge"):
         return await interaction.response.send_message("❌ Mode must be overwrite or merge.", ephemeral=True)
@@ -548,7 +547,7 @@ async def quest_import(interaction: discord.Interaction, file: discord.Attachmen
         json.dump(final_data, f, indent=4)
 
     # Reload templates into memory
-    quest_manager.load_templates()
+    quest_manager.reload_templates()
 
     await interaction.response.send_message(
         f"🟢 Quest import complete! Mode: **{mode}**\nImported **{len(new_data)}** quest(s).",
