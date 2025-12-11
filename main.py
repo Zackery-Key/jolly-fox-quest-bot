@@ -46,6 +46,61 @@ def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
 
     return f"[{'█' * filled}{'░' * empty}]"
 
+async def refresh_quest_board(bot):
+    """Update the existing quest board message if we have one saved."""
+    board = quest_manager.quest_board
+
+    if not board.display_channel_id or not board.message_id:
+        return  # No board created yet
+
+    try:
+        channel = bot.get_channel(board.display_channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(board.display_channel_id)
+
+        msg = await channel.fetch_message(board.message_id)
+
+        # Generate a fresh embed
+        stats = quest_manager.get_scoreboard()
+        global_points = stats["global_points"]
+        lifetime_completed = stats["lifetime_completed"]
+        season_completed = stats["season_completed"]
+
+        SEASON_GOAL = 100
+        progress_bar = make_progress_bar(global_points, SEASON_GOAL)
+
+        embed = discord.Embed(
+            title="🛡️ Jolly Fox Guild Quest Board",
+            description="Seasonal progress for the whole guild.",
+            color=discord.Color.gold()
+        )
+
+        embed.add_field(
+            name="📊 Global Guild Points",
+            value=f"{global_points} / {SEASON_GOAL} pts\n{progress_bar}",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🏆 Quests Completed This Season",
+            value=str(season_completed),
+            inline=True
+        )
+
+        embed.add_field(
+            name="🌟 Lifetime Quests Completed (All Players)",
+            value=str(lifetime_completed),
+            inline=True
+        )
+
+        embed.set_footer(
+            text="Every completed quest pushes the Jolly Fox further this season."
+        )
+
+        await msg.edit(embed=embed)
+
+    except Exception as e:
+        print("⚠ Failed to refresh quest board:", e)
 
 async def _ensure_active_daily(interaction, expected_type=None, create_if_missing=True):
     """
@@ -400,6 +455,7 @@ async def quest_npc(interaction: discord.Interaction):
     # Award points
     quest_manager.quest_board.add_points(template.points)
     quest_manager.save_board()
+    await refresh_quest_board(interaction.client)
 
     reply_text = npc.default_reply or "They acknowledge your presence."
 
@@ -444,6 +500,7 @@ async def quest_skill(interaction: discord.Interaction):
     if gained > 0:
         quest_manager.quest_board.add_points(gained)
         quest_manager.save_board()
+        await refresh_quest_board(interaction.client)
 
     msg = result_text
     if gained > 0:
@@ -474,6 +531,7 @@ async def quest_checkin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
     quest_manager.quest_board.add_points(template.points)
     quest_manager.save_board()
+    await refresh_quest_board(interaction.client)
 
     await interaction.response.send_message(
         f"🚶 You check in at your destination.\n\n"
@@ -559,6 +617,7 @@ async def quest_turnin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
     quest_manager.quest_board.add_points(template.points)
     quest_manager.save_board()
+    await refresh_quest_board(interaction.client)
 
     item_name = template.item_name or "Quest Item"
 
