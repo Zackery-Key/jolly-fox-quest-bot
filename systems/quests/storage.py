@@ -17,7 +17,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 PLAYERS_FILE = os.path.join(DATA_DIR, "players.json")
 BOARD_FILE   = os.path.join(DATA_DIR, "quest_board.json")
 NPCS_FILE    = os.path.join(DATA_DIR, "npcs.json")
-QUESTS_FILE  = os.path.join(DATA_DIR, "quest.json")
+QUESTS_FILE  = os.path.join(DATA_DIR, "quests.json")
 
 
 # =================================================
