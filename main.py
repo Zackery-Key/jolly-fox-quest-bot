@@ -269,6 +269,99 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 # Commands ADMIN
 # =========================
 
+@bot.tree.command(name="quest_admin_migrate_profiles",description="ADMIN: Auto-repair all player profiles in persistent storage.")
+async def quest_admin_migrate_profiles(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message(
+            "❌ You do not have permission to run this.",
+            ephemeral=True
+        )
+
+    from systems.quests import storage
+    repaired = 0
+
+    # Load all profiles from storage
+    players = storage.load_players()
+
+    for user_id, data in list(players.items()):
+
+        changed = False
+
+        # --- Ensure required fields exist ---
+        # XP
+        if "xp" not in data or type(data["xp"]) is not int:
+            data["xp"] = 0
+            changed = True
+
+        # Level
+        if "level" not in data or type(data["level"]) is not int:
+            data["level"] = 1
+            changed = True
+
+        # Faction
+        if "faction_id" not in data:
+            data["faction_id"] = None
+            changed = True
+
+        # Lifetime Completed
+        if "lifetime_completed" not in data or type(data["lifetime_completed"]) is not int:
+            data["lifetime_completed"] = 0
+            changed = True
+
+        # Season Completed
+        if "season_completed" not in data or type(data["season_completed"]) is not int:
+            data["season_completed"] = 0
+            changed = True
+
+        # Daily quest structure
+        dq = data.get("daily_quest", {})
+        if type(dq) is not dict:
+            data["daily_quest"] = {}
+            changed = True
+        else:
+            # Ensure keys exist
+            if "quest_id" not in dq:
+                dq["quest_id"] = None
+            if "assigned_date" not in dq:
+                dq["assigned_date"] = None
+            if "completed" not in dq:
+                dq["completed"] = False
+            if "role_snapshot" not in dq:
+                dq["role_snapshot"] = []
+            data["daily_quest"] = dq
+
+        # --- Inventory migration ---
+        inv = data.get("inventory")
+
+        # Old format = list of InventoryItem dicts
+        if isinstance(inv, list):
+            new_inv = {}
+            for item in inv:
+                name = item.get("item_name")
+                if name:
+                    new_inv[name] = new_inv.get(name, 0) + 1
+            data["inventory"] = new_inv
+            changed = True
+
+        # Missing or wrong type
+        elif not isinstance(inv, dict):
+            data["inventory"] = {}
+            changed = True
+
+        # Save changes
+        if changed:
+            players[user_id] = data
+            repaired += 1
+
+    # Write repaired data back
+    storage.save_players(players)
+
+    await interaction.response.send_message(
+        f"🛠️ Migration complete!\nRepaired **{repaired}** player profiles.",
+        ephemeral=True
+    )
+
+
 @bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.",)
 async def quest_board_cmd(interaction: discord.Interaction):
     board = quest_manager.quest_board
