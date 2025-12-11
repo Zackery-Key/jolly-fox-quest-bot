@@ -820,7 +820,9 @@ async def npc_export(interaction: discord.Interaction):
     import json
 
     npcs = storage.load_npcs()
-    content = json.dumps(npcs, indent=4)
+    serializable = {npc_id: npc.to_dict() for npc_id, npc in npcs.items()}
+    content = json.dumps(serializable, indent=4)
+
 
     file = discord.File(
         fp=bytes(content, "utf-8"),
