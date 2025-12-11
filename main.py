@@ -515,8 +515,10 @@ async def quest_export(interaction: discord.Interaction):
     quests = storage.load_quests()
     content = json.dumps(quests, indent=4)
 
+    buffer = io.BytesIO(content.encode("utf-8"))
+
     file = discord.File(
-        fp=bytes(content, "utf-8"),
+        fp=buffer,
         filename="quests_export.json"
     )
 
