@@ -93,6 +93,7 @@ class QuestManager:
         # Filter templates by allowed_roles vs user roles
         eligible_templates: list[QuestTemplate] = []
         for t in self.quest_templates.values():
+            print("DEBUG Template:", t.quest_id, "Allowed:", t.allowed_roles)
             if self._template_allowed_for_roles(t, role_ids):
                 eligible_templates.append(t)
 
