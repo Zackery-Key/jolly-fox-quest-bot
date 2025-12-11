@@ -3,13 +3,13 @@
     "npc_id": "celara",
     "name": "Celara",
     "avatar_url": "https://example.com/celara.png",
-    "dialogue": "Greetings, traveler!"
+    "default_reply": "Greetings, traveler!"
   },
 
   "orlin": {
     "npc_id": "orlin",
     "name": "Orlin",
     "avatar_url": "https://example.com/orlin.png",
-    "dialogue": "Knowledge awaits."
+    "default_reply": "Knowledge awaits."
   }
 }
