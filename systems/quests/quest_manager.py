@@ -114,6 +114,26 @@ class QuestManager:
     # -----------------------------------------------------
     # Scoreboard
     # -----------------------------------------------------
+    def award_points(self, user_id: int, amount: int, faction_id: str | None = None):
+        """
+        Award guild points for a quest completion.
+        Always increases global points.
+        Also increases the given faction's points, if faction_id is not None.
+        """
+        if amount <= 0:
+            return
+
+        # Global
+        self.quest_board.global_points += amount
+
+        # Faction
+        if faction_id:
+            current = self.quest_board.faction_points.get(faction_id, 0)
+            self.quest_board.faction_points[faction_id] = current + amount
+
+        storage.save_board(self.quest_board)
+
+    
     def get_scoreboard(self):
         total_lifetime = sum(p.lifetime_completed for p in self.players.values())
         total_season = sum(p.season_completed for p in self.players.values())

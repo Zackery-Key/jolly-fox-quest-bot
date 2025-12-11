@@ -4,6 +4,19 @@ from discord.ext import commands
 import random
 from systems.quests.quest_models import QuestType
 
+from systems.quests.factions import FACTIONS, get_faction  # you already have this
+
+# --- Faction role mapping (replace with your real IDs) ---
+SHIELDBORNE_ROLE_ID = 1447646082459762761  # TODO: put Shieldborne role ID here
+SPELLFIRE_ROLE_ID   = 1447646480889548800  # TODO: Spellfire role ID
+VERDANT_ROLE_ID     = 1447644562397859921  # TODO: Verdant role ID
+
+FACTION_ROLE_IDS = {
+    "shieldborne": SHIELDBORNE_ROLE_ID,
+    "spellfire": SPELLFIRE_ROLE_ID,
+    "verdant": VERDANT_ROLE_ID,
+}
+
 
 # Quest Manager
 from systems.quests.quest_manager import QuestManager
@@ -30,6 +43,19 @@ async def setup_hook():
     print(f"Setup complete for guild {GUILD_ID}")
 
 # Helpers
+def get_member_faction_id(member: discord.Member) -> str | None:
+    """
+    Return the faction_id for this member based on their Discord roles.
+    If they don't have any faction role, return None.
+    """
+    member_role_ids = {role.id for role in member.roles}
+
+    for faction_id, role_id in FACTION_ROLE_IDS.items():
+        if role_id in member_role_ids:
+            return faction_id
+
+    return None
+
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
     if max_value <= 0:
@@ -449,12 +475,10 @@ async def quest_npc(interaction: discord.Interaction):
         )
         return
 
-    # Complete quest
     quest_manager.complete_daily(interaction.user.id)
 
-    # Award points
-    quest_manager.quest_board.add_points(template.points)
-    quest_manager.save_board()
+    faction_id = get_member_faction_id(interaction.user)
+    quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
     reply_text = npc.default_reply or "They acknowledge your presence."
@@ -498,8 +522,8 @@ async def quest_skill(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     if gained > 0:
-        quest_manager.quest_board.add_points(gained)
-        quest_manager.save_board()
+        faction_id = get_member_faction_id(interaction.user)
+        quest_manager.award_points(interaction.user.id, gained, faction_id)
         await refresh_quest_board(interaction.client)
 
     msg = result_text
@@ -529,8 +553,9 @@ async def quest_checkin(interaction: discord.Interaction):
         return
 
     quest_manager.complete_daily(interaction.user.id)
-    quest_manager.quest_board.add_points(template.points)
-    quest_manager.save_board()
+
+    faction_id = get_member_faction_id(interaction.user)
+    quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
     await interaction.response.send_message(
@@ -615,8 +640,9 @@ async def quest_turnin(interaction: discord.Interaction):
     quest_manager.save_players()
 
     quest_manager.complete_daily(interaction.user.id)
-    quest_manager.quest_board.add_points(template.points)
-    quest_manager.save_board()
+
+    faction_id = get_member_faction_id(interaction.user)
+    quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
     item_name = template.item_name or "Quest Item"
@@ -652,10 +678,24 @@ async def quest_profile(interaction: discord.Interaction):
     lines.append(f"**Level:** {player.level}")
     lines.append(f"**XP:** {player.xp}/{xp_needed}")
 
-    # Optional XP bar
     bar_fill = int((player.xp / xp_needed) * 10)
     bar = "█" * bar_fill + "░" * (10 - bar_fill)
     lines.append(f"**Progress:** `{bar}`")
+    lines.append("")
+
+    # -----------------------------
+    # FACTION (role-based)
+    # -----------------------------
+    faction_id = get_member_faction_id(user)
+
+    if faction_id:
+        fac = get_faction(faction_id)
+        if fac:
+            lines.append(f"**Faction:** {fac.emoji} {fac.name}")
+        else:
+            lines.append(f"**Faction:** (Unknown faction `{faction_id}`)")
+    else:
+        lines.append("**Faction:** None (You have not joined a faction yet.)")
 
     lines.append("")
 
@@ -667,46 +707,6 @@ async def quest_profile(interaction: discord.Interaction):
     lines.append(f"• Seasonal Quests Completed: **{player.season_completed}**")
     lines.append("")
 
-    # -----------------------------
-    # DAILY QUEST INFO
-    # -----------------------------
-    if not daily:
-        lines.append("**Daily Quest:** None assigned yet.")
-        lines.append("Use `/quest_today` to receive today’s quest.\n")
-    else:
-        quest_id = daily.get("quest_id")
-        template = quest_manager.get_template(quest_id)
-        completed = daily.get("completed", False)
-        status_icon = "✅" if completed else "🟠"
-
-        if template:
-            lines.append(f"**Daily Quest:** {status_icon} {template.name}")
-            lines.append(f"• Type: `{template.type}`")
-            lines.append(f"• Summary: {template.summary}")
-        else:
-            lines.append(f"**Daily Quest:** Template missing for `{quest_id}`")
-
-        lines.append("")
-
-    # -----------------------------
-    # INVENTORY
-    # -----------------------------
-    if player.inventory:
-        lines.append("**Inventory (quest items):**")
-        for item in player.inventory:
-            lines.append(f"• `{item.quest_id}` — {item.item_name}")
-    else:
-        lines.append("**Inventory:** Empty")
-
-    lines.append("")
-
-    # -----------------------------
-    # GLOBAL QUEST BOARD STATUS
-    # -----------------------------
-    board_points = quest_manager.quest_board.global_points
-    lines.append(f"**Guild Quest Board (season):** {board_points} points")
-
-    await interaction.response.send_message("\n".join(lines))
 
 
 # Sync
