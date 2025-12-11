@@ -32,6 +32,11 @@ class QuestManager:
         self.quest_templates = storage.load_templates()
         print(f"Reloaded {len(self.quest_templates)} quest templates.")
 
+    def reload_npcs(self):
+        self.npcs = storage.load_npcs()
+        print(f"[QuestManager] Reloaded {len(self.npcs)} NPCs.")
+
+
 
     # -----------------------------------------------------
     # Player access / management

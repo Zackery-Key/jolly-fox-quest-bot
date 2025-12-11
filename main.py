@@ -864,6 +864,8 @@ async def npc_import(
 
     # Save final NPC JSON
     storage.save_npcs(final_data)
+    quest_manager.reload_npcs()
+
 
     await interaction.response.send_message(
         f"🟢 NPC import complete! Mode: **{mode}**\n"
@@ -1253,9 +1255,11 @@ async def quest_npc(interaction: discord.Interaction):
     reply_text = None
 
     # 1️⃣ Quest-specific dialogue
-    quest_type_str = template.type.value  # "SOCIAL"
-    if npc.quest_dialogue.get(quest_type_str):
-        reply_text = random.choice(npc.quest_dialogue[quest_type_str])
+    quest_type_str = template.type.value.upper()
+    dialogue_list = npc.quest_dialogue.get(quest_type_str)
+
+    if dialogue_list:
+        reply_text = random.choice(dialogue_list)
 
     # 2️⃣ Random greeting
     elif npc.greetings:
