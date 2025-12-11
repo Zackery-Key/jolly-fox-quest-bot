@@ -453,57 +453,6 @@ async def ping(interaction: discord.Interaction):
 
 # ADMIN Quest
 @bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).")
-async def quest_import(
-    interaction: discord.Interaction,
-    file: discord.Attachment,
-    mode: str = "overwrite"
-):
-    if not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
-
-    if mode not in ("overwrite", "merge"):
-        return await interaction.response.send_message("❌ Mode must be 'overwrite' or 'merge'.", ephemeral=True)
-
-    import json
-    from systems.quests import storage, quest_manager
-    from systems.quests.quest_models import QuestTemplate
-
-    try:
-        raw_bytes = await file.read()
-        new_data = json.loads(raw_bytes.decode("utf-8"))
-    except Exception as e:
-        return await interaction.response.send_message(f"❌ JSON error: {e}", ephemeral=True)
-
-    # Validate each quest entry
-    for qid, quest in new_data.items():
-        if "name" not in quest or "type" not in quest:
-            return await interaction.response.send_message(
-                f"❌ Quest '{qid}' missing required fields ('name', 'type').",
-                ephemeral=True
-            )
-
-    # Load existing quest JSON
-    current = storage.load_quests()
-
-    # Apply mode
-    if mode == "overwrite":
-        final_data = new_data
-    else:
-        final_data = {**current, **new_data}
-
-    # Save
-    storage.save_quests(final_data)
-
-    # Reload quest templates into memory
-    quest_manager.load_templates()
-
-    await interaction.response.send_message(
-        f"🟢 Quest import complete! Mode: **{mode}**\n"
-        f"Imported **{len(new_data)}** quest(s).",
-        ephemeral=True
-    )
-
-@bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).")
 async def quest_import(interaction: discord.Interaction, file: discord.Attachment, mode: str = "overwrite"):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -539,6 +488,41 @@ async def quest_import(interaction: discord.Interaction, file: discord.Attachmen
 
     await interaction.response.send_message(
         f"🟢 Quest import complete! Mode: **{mode}**\nImported **{len(new_data)}** quest(s).",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="quest_export",description="ADMIN: Export current quest JSON file.")
+async def quest_export(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    import json
+    import io
+    import discord
+    from systems.quests.storage import QUESTS_FILE
+
+    # Load the raw quests.json file exactly as-is
+    try:
+        with open(QUESTS_FILE, "r", encoding="utf-8") as f:
+            quests = json.load(f)
+    except Exception as e:
+        return await interaction.response.send_message(
+            f"❌ Error reading quests.json: {e}",
+            ephemeral=True
+        )
+
+    content = json.dumps(quests, indent=4)
+
+    buffer = io.BytesIO(content.encode("utf-8"))
+
+    file = discord.File(
+        fp=buffer,
+        filename="quests_export.json"
+    )
+
+    await interaction.response.send_message(
+        content="📦 Quest export file:",
+        file=file,
         ephemeral=True
     )
 
