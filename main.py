@@ -1194,6 +1194,14 @@ async def quest_turnin(interaction: discord.Interaction):
 # ========= Events =========
 
 @bot.event
+async def setup_hook():
+    guild = discord.Object(id=GUILD_ID)
+
+    # Copy all global commands into the guild
+    bot.tree.copy_global_to(guild=guild)
+
+
+@bot.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     cmds = await bot.tree.sync(guild=guild)
