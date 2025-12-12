@@ -494,7 +494,7 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     elif template.type == QuestType.FETCH:
         hint_lines.append(
-            f"• Gather the item with `/quest_fetch`, then use `/quest_turnin`."
+            f"• Go to <#{template.source_channel_id}> and gather the item with `/quest_fetch`, then deliver to <#{template.turnin_channel_id}> and use `/quest_turnin`."
         )
         if template.item_name:
             hint_lines.append(f"• Required item: **{template.item_name}**")
