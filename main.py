@@ -432,7 +432,7 @@ def require_admin(interaction: discord.Interaction) -> bool:
 
 # ========= ADMIN: Maintenance =========
 
-@bot.tree.command(name="quest_admin_wipe_user", description="Admin: Reset a user's quest profile completely.",)
+@bot.tree.command(name="quest_admin_wipe_user", description="Admin: Reset a user's quest profile completely.", default_permissions=discord.Permissions(manage_guild=True))
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
     member: discord.Member,
@@ -458,7 +458,7 @@ async def quest_admin_reset_user(
         f"(ID: {user_id}). They can start fresh with `/quest_today`."
     )
 
-@bot.tree.command(name="quest_admin_reset_daily",description="ADMIN: Reset a user's daily quest (keeps profile intact).")
+@bot.tree.command(name="quest_admin_reset_daily",description="ADMIN: Reset a user's daily quest (keeps profile intact).", default_permissions=discord.Permissions(manage_guild=True))
 async def quest_admin_reset_daily(
     interaction: discord.Interaction,
     member: discord.Member
@@ -484,7 +484,7 @@ async def quest_admin_reset_daily(
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.",)
+@bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_admin_cleanup(interaction: discord.Interaction):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -505,7 +505,7 @@ async def quest_admin_cleanup(interaction: discord.Interaction):
         f"🧹 Cleaned up **{removed}** profiles no longer in the server."
     )
 
-@bot.tree.command(name="ping", description="Test that the bot is alive.")
+@bot.tree.command(name="ping", description="Test that the bot is alive.", default_permissions=discord.Permissions(manage_guild=True))
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🦊 Pong!", ephemeral=True)
 
@@ -513,7 +513,7 @@ async def ping(interaction: discord.Interaction):
 
 # ========= ADMIN: Import / Export =========
 
-@bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).")
+@bot.tree.command(name="quest_import",description="ADMIN: Import Quest JSON file (overwrite or merge).", default_permissions=discord.Permissions(manage_guild=True))
 async def quest_import(interaction: discord.Interaction, file: discord.Attachment, mode: str = "overwrite"):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -552,7 +552,7 @@ async def quest_import(interaction: discord.Interaction, file: discord.Attachmen
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_export",description="ADMIN: Export current quest JSON file.")
+@bot.tree.command(name="quest_export",description="ADMIN: Export current quest JSON file.", default_permissions=discord.Permissions(manage_guild=True))
 async def quest_export(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -583,7 +583,7 @@ async def quest_export(interaction: discord.Interaction):
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_admin_list_quests",description="Admin: List all quest templates.",)
+@bot.tree.command(name="quest_admin_list_quests",description="Admin: List all quest templates.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_admin_list_quests(interaction: discord.Interaction):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -608,7 +608,7 @@ async def quest_admin_list_quests(interaction: discord.Interaction):
     msg = "**Current Quest Templates:**\n" + "\n".join(lines)
     await interaction.response.send_message(msg, ephemeral=True)
 
-@bot.tree.command(name="npc_import",description="ADMIN: Import NPC JSON file (overwrite or merge).")
+@bot.tree.command(name="npc_import",description="ADMIN: Import NPC JSON file (overwrite or merge).", default_permissions=discord.Permissions(manage_guild=True))
 async def npc_import(
     interaction: discord.Interaction,
     file: discord.Attachment,
@@ -651,7 +651,7 @@ async def npc_import(
         ephemeral=True
     )
 
-@bot.tree.command(name="npc_export",description="ADMIN: Export current NPC JSON file.")
+@bot.tree.command(name="npc_export",description="ADMIN: Export current NPC JSON file.", default_permissions=discord.Permissions(manage_guild=True))
 async def npc_export(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -674,7 +674,7 @@ async def npc_export(interaction: discord.Interaction):
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_admin_list_npcs",description="Admin: List all quest NPCs.",)
+@bot.tree.command(name="quest_admin_list_npcs",description="Admin: List all quest NPCs.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_admin_list_npcs(interaction: discord.Interaction):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
@@ -697,7 +697,7 @@ async def quest_admin_list_npcs(interaction: discord.Interaction):
 
 # ========= ADMIN: Board =========
 
-@bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.",)
+@bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_board_cmd(interaction: discord.Interaction):
     board = quest_manager.quest_board
     embed = build_board_embed()
@@ -730,7 +730,7 @@ async def quest_board_cmd(interaction: discord.Interaction):
             ephemeral=True,
         )
 
-@bot.tree.command(name="quest_admin_set_season",description="Admin: Start a new season and set goal/reward text.",)
+@bot.tree.command(name="quest_admin_set_season",description="Admin: Start a new season and set goal/reward text.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_admin_set_season(
     interaction: discord.Interaction,
     season_id: str,
@@ -753,7 +753,7 @@ async def quest_admin_set_season(
         ephemeral=True,
     )
 
-@bot.tree.command(name="quest_admin_set_board_meta",description="Admin: Edit the seasonal goal or reward text without resetting points.",)
+@bot.tree.command(name="quest_admin_set_board_meta",description="Admin: Edit the seasonal goal or reward text without resetting points.", default_permissions=discord.Permissions(manage_guild=True))
 async def quest_admin_set_board_meta(
     interaction: discord.Interaction,
     season_goal: int | None = None,
@@ -784,7 +784,7 @@ async def quest_admin_set_board_meta(
         ephemeral=True,
     )
 
-@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset global and faction points for the current season.",)
+@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset global and faction points for the current season.", default_permissions=discord.Permissions(manage_guild=True),)
 async def quest_admin_reset_board(interaction: discord.Interaction):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
