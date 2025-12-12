@@ -899,23 +899,37 @@ async def quest_admin_set_board_meta(
         ephemeral=True,
     )
 
-@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset global and faction points for the current season.")
+@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset the current season (board + player seasonal stats).")
 @app_commands.default_permissions(manage_guild=True)
 async def quest_admin_reset_board(interaction: discord.Interaction):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     board = quest_manager.quest_board
+
+    # 🔄 RESET BOARD STATE
     board.global_points = 0
     board.faction_points = {}
 
+    # 🔄 RESET PLAYER SEASONAL STATS
+    for player in quest_manager.players.values():
+        player.season_completed = 0
+
+    # Persist everything
+    quest_manager.save_players()
     quest_manager.save_board()
+
     await refresh_quest_board(interaction.client)
 
     await interaction.response.send_message(
-        "🧹 Quest board points have been reset for the current season.",
+        "🧹 **Season reset complete.**\n"
+        "• Guild points cleared\n"
+        "• Faction standings reset\n"
+        "• Player seasonal progress reset\n\n"
+        "_Lifetime stats were not affected._",
         ephemeral=True,
     )
+
 
 
 

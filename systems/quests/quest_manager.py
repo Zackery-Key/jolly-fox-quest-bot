@@ -18,6 +18,7 @@ class QuestManager:
         print(f"Loaded {len(self.npcs)} NPCs.")
         print("QuestManager Initialized")
 
+
     # -----------------------------------------------------
     # Template + NPC access
     # -----------------------------------------------------
@@ -61,7 +62,6 @@ class QuestManager:
             storage.save_players(self.players)
             return True
         return False
-    
 
     def _template_allowed_for_roles(self, template: QuestTemplate, role_ids: list[int]) -> bool:
         """
@@ -78,6 +78,8 @@ class QuestManager:
         role_set = set(role_ids)
         return any(role_id in role_set for role_id in template.allowed_roles)
     
+
+
     # -----------------------------------------------------
     # Daily Quest Assignment
     # -----------------------------------------------------
@@ -94,7 +96,10 @@ class QuestManager:
         today = str(date.today())
 
         # If a quest is already assigned for today, keep it.
-        if player.daily_quest.get("assigned_date") == today:
+        if (
+            player.daily_quest.get("assigned_date") == today
+            and not player.daily_quest.get("completed")
+        ):
             return player.daily_quest.get("quest_id")
         
         # 🧹 NEW: Day changed — clear old daily quest state and fetch items
@@ -178,6 +183,12 @@ class QuestManager:
         if amount <= 0:
             return
 
+        player = self.get_or_create_player(user_id)
+
+        # 🔧 FIX: persist faction to player profile
+        if faction_id:
+            player.faction_id = faction_id
+
         # Global seasonal points
         self.quest_board.global_points += amount
 
@@ -188,7 +199,6 @@ class QuestManager:
 
         # Persist
         self.save_board()
-
     
     def get_scoreboard(self):
         total_lifetime = sum(p.lifetime_completed for p in self.players.values())
