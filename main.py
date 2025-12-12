@@ -265,124 +265,94 @@ async def refresh_quest_board(bot: commands.Bot):
     except Exception as e:
         print("⚠ Failed to refresh quest board:", e)
 
-async def send_daily_quest(interaction: discord.Interaction):
+async def _ensure_active_daily(interaction, expected_type=None, create_if_missing=True):
     user = interaction.user
     user_id = user.id
-    today = str(date.today())
 
-    # Get or create player FIRST (no assignment yet)
-    player = quest_manager.get_or_create_player(user_id)
+    if create_if_missing:
+        player = quest_manager.get_or_create_player(user_id)
+    else:
+        player = quest_manager.get_player(user_id)
 
-    # 🛑 HARD STOP — already completed today
-    if (
-        player.daily_quest
-        and player.daily_quest.get("assigned_date") == today
-        and player.daily_quest.get("completed")
-    ):
-        tmpl = quest_manager.get_template(player.daily_quest.get("quest_id"))
-
+    if not player:
         await interaction.response.send_message(
-            (
-                "✅ **You've already completed today's quest!**\n\n"
-                f"**Quest:** {tmpl.name if tmpl else 'Unknown'}\n\n"
-                "🕒 Come back tomorrow for a new one."
-            ),
+            "You do not have a guild profile yet. Use `/quest_today` to begin.",
             ephemeral=True,
         )
-        return
+        return None, None
 
-    # 📜 If they already have an active daily today, just show it
-    if (
-        player.daily_quest
-        and player.daily_quest.get("assigned_date") == today
-        and not player.daily_quest.get("completed")
-    ):
-        quest_id = player.daily_quest.get("quest_id")
-    else:
-        # ✅ SAFE: assign a new daily quest
-        role_ids = [role.id for role in getattr(user, "roles", [])]
-        quest_id = quest_manager.assign_daily(user_id, role_ids)
+    if not player.daily_quest:
+        await interaction.response.send_message(
+            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            ephemeral=True,
+        )
+        return None, None
 
-        if quest_id is None:
-            await interaction.response.send_message(
-                "🦊 There are no quests available for your current roles right now.\n\n"
-                "If you join a new guild faction or RP group later today, "
-                "you can try again.",
-                ephemeral=True,
-            )
-            return
+    if "quest_id" not in player.daily_quest:
+        await interaction.response.send_message(
+            "⚠️ Your daily quest data is incomplete. Use `/quest_today` to refresh.",
+            ephemeral=True,
+        )
+        return None, None
 
+    if player.daily_quest.get("completed"):
+        await interaction.response.send_message(
+            "✅ You've already completed today's quest.",
+            ephemeral=True,
+        )
+        return None, None
+
+    quest_id = player.daily_quest.get("quest_id")
     template = quest_manager.get_template(quest_id)
+
     if template is None:
         await interaction.response.send_message(
-            "⚠️ Error loading your quest. Please contact an admin.",
+            "⚠️ Error: Your quest template could not be found. Please tell an admin.",
             ephemeral=True,
         )
-        return
+        return None, None
 
-    completed = bool(player.daily_quest.get("completed"))
-    status_label = "✅ COMPLETED" if completed else "🟠 ACTIVE"
-
-    body = f"**Name:** {template.name}\n"
-
-    if template.type == QuestType.SKILL:
-        body += f"**Success:** {template.points_on_success or 0} pts\n"
-        body += f"**Fail:** {template.points_on_fail or 0} pts\n\n"
-    else:
-        body += f"**Points:** {template.points}\n\n"
-
-    body += f"**Summary:** {template.summary}\n"
-
-    hint_lines: list[str] = []
-
-    if template.type == QuestType.SOCIAL:
-        hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_npc`."
+    # Type check (SKILL/SOCIAL/FETCH/TRAVEL)
+    if expected_type is not None and template.type != expected_type:
+        await interaction.response.send_message(
+            f"❌ Your current quest is `{template.type.value}`, "
+            f"not `{expected_type.value}`.\nUse the correct command for your quest type.",
+            ephemeral=True,
         )
-        if template.npc_id:
-            hint_lines.append(f"• Required NPC: `{template.npc_id}`")
+        return None, None
 
-    elif template.type == QuestType.SKILL:
-        hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_skill`."
-        )
-        if template.dc:
-            hint_lines.append(f"• Target DC: **{template.dc}**")
+    # -----------------------------------------
+    # NEW: Allowed role enforcement (Option B)
+    # -----------------------------------------
+    allowed_roles = getattr(template, "allowed_roles", []) or []
 
-    elif template.type == QuestType.TRAVEL:
-        hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_checkin`."
-        )
+    # If quest has role restrictions, we enforce them:
+    if allowed_roles:
+        current_roles = {role.id for role in getattr(user, "roles", [])}
+        snapshot = player.daily_quest.get("role_snapshot") or []
 
-    elif template.type == QuestType.FETCH:
-        hint_lines.append(
-            f"• Go to <#{template.source_channel_id}> and gather the item with `/quest_fetch`, "
-            f"then deliver to <#{template.turnin_channel_id}> and use `/quest_turnin`."
-        )
-        if template.item_name:
-            hint_lines.append(f"• Required item: **{template.item_name}**")
+        # If they currently have at least one required role → OK
+        if any(rid in current_roles for rid in allowed_roles):
+            pass  # allowed
+        else:
+            # They do NOT currently have allowed roles.
+            # Option B: If they had the role at assignment time, still allow completion.
+            if any(rid in snapshot for rid in allowed_roles):
+                # They were legit when the quest was assigned.
+                pass
+            else:
+                # They never had the required roles for this quest.
+                # This should not happen anymore with the new assignment logic,
+                # but we handle it gracefully.
+                await interaction.response.send_message(
+                    "❌ You don't have the required role to complete this quest.\n"
+                    "If you believe this is a mistake, please contact an admin.\n"
+                    "You will get a new quest tomorrow with `/quest_today`.",
+                    ephemeral=True,
+                )
+                return None, None
 
-    hint_text = (
-        "\n\n**How to complete it:**\n" + "\n".join(hint_lines)
-        if hint_lines
-        else ""
-    )
-
-    footer = (
-        "\n\n✨ You’ve already completed this quest today."
-        if completed
-        else "\n\n✨ Complete this quest to earn guild points."
-    )
-
-    msg = (
-        f"**🦊 Your Daily Quest — {status_label}**\n\n"
-        + body
-        + hint_text
-        + footer
-    )
-
-    await interaction.response.send_message(msg, ephemeral=True)
-
+    return player, template
 
 def validate_quest_data(quests: dict) -> tuple[bool, str]:
     """Validate quest JSON before import."""
