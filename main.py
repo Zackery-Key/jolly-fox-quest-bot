@@ -7,6 +7,7 @@ from discord.ext import commands
 import io
 import json
 
+from systems.quests.npc_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
 from systems.quests.quest_models import QuestType, QuestTemplate
 from systems.quests.factions import get_faction, FACTIONS
@@ -14,6 +15,7 @@ from systems.quests.npc_models import NPC
 from systems.quests import storage
 from systems.quests.storage import QUESTS_FILE
 from discord import app_commands
+from datetime import date
 
 
 # ========= Constants / IDs =========
@@ -1017,26 +1019,8 @@ async def quest_npc(interaction: discord.Interaction):
     # -------------------------------------------------------------
     # NPC DIALOGUE SELECTION LOGIC
     # -------------------------------------------------------------
-    reply_text = None
+    reply_text = get_npc_quest_dialogue(npc, template)
 
-    # 1️⃣ Quest-specific dialogue
-    quest_type_str = template.type.value.upper()
-    dialogue_list = npc.quest_dialogue.get(quest_type_str)
-
-    if dialogue_list:
-        reply_text = random.choice(dialogue_list)
-
-    # 2️⃣ Random greeting
-    elif npc.greetings:
-        reply_text = random.choice(npc.greetings)
-
-    # 3️⃣ Idle chatter
-    elif npc.idle_lines:
-        reply_text = random.choice(npc.idle_lines)
-
-    # 4️⃣ Legacy fallback
-    else:
-        reply_text = npc.default_reply or f"{npc.name} acknowledges your presence."
 
     # -------------------------------------------------------------
     # Complete quest + award points
@@ -1055,7 +1039,7 @@ async def quest_npc(interaction: discord.Interaction):
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
-@bot.tree.command(name="quest_skill",description="Attempt a SKILL quest roll.")
+@bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
 async def quest_skill(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.SKILL
@@ -1075,12 +1059,18 @@ async def quest_skill(interaction: discord.Interaction):
     roll = random.randint(1, 20)
     success = roll >= dc
 
-    if success:
-        gained = template.points_on_success or template.points or 0
-        result_text = f"🎯 You rolled **{roll}** (DC {dc}) — **Success!**"
-    else:
-        gained = template.points_on_fail or 0
-        result_text = f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
+    gained = template.points_on_success if success else template.points_on_fail or 0
+    result_text = (
+        f"🎯 You rolled **{roll}** (DC {dc}) — **Success!**"
+        if success else
+        f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
+    )
+
+    # Get NPC dialogue if available
+    dialogue = None
+    if template.npc_id:
+        npc = quest_manager.get_npc(template.npc_id)
+        dialogue = get_npc_quest_dialogue(npc, template, success=success)
 
     quest_manager.complete_daily(interaction.user.id)
 
@@ -1090,17 +1080,14 @@ async def quest_skill(interaction: discord.Interaction):
         await refresh_quest_board(interaction.client)
 
     msg = result_text
-    if gained > 0:
-        msg += f"\n\n✨ You earned **{gained}** guild points."
+    if dialogue:
+        msg += f"\n\n**{npc.name}** says:\n> {dialogue}"
     else:
-        msg += (
-            "\n\nYou didn't earn any points this time, but the effort still counts for "
-            "your daily quest."
-        )
+        msg += "\n\nYou complete the task without comment."
 
-    await interaction.response.send_message(msg)
+    await interaction.response.send_message(msg, ephemeral=True)
 
-@bot.tree.command(name="quest_checkin",description="Complete a TRAVEL quest by checking in at the right location.")
+@bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def quest_checkin(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.TRAVEL
@@ -1116,6 +1103,9 @@ async def quest_checkin(interaction: discord.Interaction):
         )
         return
 
+    npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
+    dialogue = get_npc_quest_dialogue(npc, template) if npc else None
+
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
@@ -1123,8 +1113,9 @@ async def quest_checkin(interaction: discord.Interaction):
     await refresh_quest_board(interaction.client)
 
     await interaction.response.send_message(
-        f"🚶 You check in at your destination.\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points."
+        f"🚶 {dialogue or 'You check in at your destination.'}\n\n"
+        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        ephemeral=True,
     )
 
 @bot.tree.command(name="quest_fetch",description="Collect the required item for a FETCH quest.")
@@ -1169,7 +1160,7 @@ async def quest_fetch(interaction: discord.Interaction):
         f"Now take it to {turnin_hint} to complete your quest."
     )
 
-@bot.tree.command(name="quest_turnin",description="Turn in the collected item for your FETCH quest.")
+@bot.tree.command(name="quest_turnin", description="Turn in the collected item for your FETCH quest.")
 async def quest_turnin(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
@@ -1185,8 +1176,6 @@ async def quest_turnin(interaction: discord.Interaction):
         )
         return
 
-    quest_id = player.daily_quest.get("quest_id")
-
     if not player.has_item_for_quest(template.item_name):
         await interaction.response.send_message(
             "❌ You don't have the required quest item yet. "
@@ -1197,7 +1186,6 @@ async def quest_turnin(interaction: discord.Interaction):
 
     player.consume_item(template.item_name)
     quest_manager.save_players()
-
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
@@ -1206,8 +1194,11 @@ async def quest_turnin(interaction: discord.Interaction):
 
     item_name = template.item_name or "Quest Item"
 
+    npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
+    dialogue = get_npc_quest_dialogue(npc, template) if npc else None
+
     await interaction.response.send_message(
-        f"📬 You turn in **{item_name}** to the guild.\n\n"
+        f"📬 {dialogue or f'You turn in **{item_name}** to the guild.'}\n\n"
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 

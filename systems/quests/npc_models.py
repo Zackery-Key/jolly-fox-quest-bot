@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict
+import random
+from systems.quests.quest_models import QuestType, QuestTemplate
 
 @dataclass
 class NPC:
@@ -17,6 +19,30 @@ class NPC:
 
     # Optional flavor
     personality: str = ""
+
+    def get_npc_quest_dialogue(npc, quest, *, success=None):
+        if not npc or not quest:
+            return "The NPC glances at you silently."
+
+        quest_id = getattr(quest, "quest_id", None)
+        quest_type = quest.type.value if isinstance(quest.type, QuestType) else quest.type
+
+        # Priority 1: quest-specific
+        if quest_id and quest_id in npc.quest_dialogue:
+            return random.choice(npc.quest_dialogue[quest_id])
+
+        # Priority 2: SKILL outcomes
+        if quest_type == "SKILL" and success is not None:
+            key = "SKILL_SUCCESS" if success else "SKILL_FAIL"
+            if key in npc.quest_dialogue:
+                return random.choice(npc.quest_dialogue[key])
+
+        # Priority 3: type-level fallback
+        if quest_type in npc.quest_dialogue:
+            return random.choice(npc.quest_dialogue[quest_type])
+
+        return npc.default_reply or "The NPC nods without a word."
+
 
     def to_dict(self):
         return {
