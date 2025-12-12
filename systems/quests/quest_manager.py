@@ -96,6 +96,12 @@ class QuestManager:
         # If a quest is already assigned for today, keep it.
         if player.daily_quest.get("assigned_date") == today:
             return player.daily_quest.get("quest_id")
+        
+        # 🧹 NEW: Day changed — clear old daily quest state and fetch items
+        if player.daily_quest.get("assigned_date"):
+            # Inventory currently only contains FETCH items, so clear it safely
+            player.inventory.clear()
+            player.daily_quest = {}
 
         # Defensive: no templates loaded
         if not self.quest_templates:
