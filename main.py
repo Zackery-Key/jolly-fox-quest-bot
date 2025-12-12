@@ -167,7 +167,8 @@ async def refresh_quest_board(bot: commands.Bot):
 
         msg = await channel.fetch_message(board.message_id)
         embed = build_board_embed()
-        await msg.edit(embed=embed)
+        await msg.edit(embed=embed,view=QuestBoardView())
+
     except Exception as e:
         print("⚠ Failed to refresh quest board:", e)
 
@@ -320,6 +321,109 @@ def validate_npc_data(npcs: dict) -> tuple[bool, str]:
 
     return True, "OK"
 
+async def send_daily_quest(interaction: discord.Interaction):
+    user = interaction.user
+    user_id = user.id
+
+    role_ids = [role.id for role in getattr(user, "roles", [])]
+
+    quest_id = quest_manager.assign_daily(user_id, role_ids)
+    player = quest_manager.get_player(user_id)
+
+    if quest_id is None:
+        await interaction.response.send_message(
+            "🦊 There are no quests available for your current roles right now.\n\n"
+            "If you join a new guild faction or RP group later today, "
+            "you can try again.",
+            ephemeral=True,
+        )
+        return
+
+    template = quest_manager.get_template(quest_id)
+    if template is None:
+        await interaction.response.send_message(
+            "⚠️ Error loading your quest. Please contact an admin.",
+            ephemeral=True,
+        )
+        return
+
+    completed = bool(player.daily_quest.get("completed"))
+    status_label = "✅ COMPLETED" if completed else "🟠 ACTIVE"
+
+    body = f"**Name:** {template.name}\n"
+
+    if template.type == QuestType.SKILL:
+        body += f"**Success:** {template.points_on_success or 0} pts\n"
+        body += f"**Fail:** {template.points_on_fail or 0} pts\n\n"
+    else:
+        body += f"**Points:** {template.points}\n\n"
+
+    body += f"**Summary:** {template.summary}\n"
+
+    hint_lines: list[str] = []
+
+    if template.type == QuestType.SOCIAL:
+        hint_lines.append(
+            f"• Go to <#{template.required_channel_id}> and use `/quest_npc`."
+        )
+        if template.npc_id:
+            hint_lines.append(f"• Required NPC: `{template.npc_id}`")
+
+    elif template.type == QuestType.SKILL:
+        hint_lines.append(
+            f"• Go to <#{template.required_channel_id}> and use `/quest_skill`."
+        )
+        if template.dc:
+            hint_lines.append(f"• Target DC: **{template.dc}**")
+
+    elif template.type == QuestType.TRAVEL:
+        hint_lines.append(
+            f"• Go to <#{template.required_channel_id}> and use `/quest_checkin`."
+        )
+
+    elif template.type == QuestType.FETCH:
+        hint_lines.append(
+            f"• Gather the item with `/quest_fetch`, then use `/quest_turnin`."
+        )
+        if template.item_name:
+            hint_lines.append(f"• Required item: **{template.item_name}**")
+
+    hint_text = (
+        "\n\n**How to complete it:**\n" + "\n".join(hint_lines)
+        if hint_lines
+        else ""
+    )
+
+    footer = (
+        "\n\n✨ You’ve already completed this quest today."
+        if completed
+        else "\n\n✨ Complete this quest to earn guild points."
+    )
+
+    msg = (
+        f"**🦊 Your Daily Quest — {status_label}**\n\n"
+        + body
+        + hint_text
+        + footer
+    )
+
+    await interaction.response.send_message(msg, ephemeral=True)
+
+class QuestBoardView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)  # persistent view
+
+    @discord.ui.button(
+        label="🦊 View Daily Quest",
+        style=discord.ButtonStyle.primary,
+        custom_id="quest_board:view_daily"
+    )
+    async def view_daily(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await send_daily_quest(interaction)
 
 
 # ========= ADMIN: Maintenance =========
@@ -337,99 +441,7 @@ async def quest_admin_clear_commands(interaction: discord.Interaction):
         ephemeral=True
     )
 
-@bot.tree.command(name="quest_admin_migrate_profiles",description="ADMIN: Auto-repair all player profiles in persistent storage.")
-async def quest_admin_migrate_profiles(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ You do not have permission to run this.",
-            ephemeral=True
-        )
-
-    from systems.quests import storage
-    repaired = 0
-
-    # Load all profiles from storage
-    players = storage.load_players()
-
-    for user_id, data in list(players.items()):
-
-        changed = False
-
-        # --- Ensure required fields exist ---
-        # XP
-        if "xp" not in data or type(data["xp"]) is not int:
-            data["xp"] = 0
-            changed = True
-
-        # Level
-        if "level" not in data or type(data["level"]) is not int:
-            data["level"] = 1
-            changed = True
-
-        # Faction
-        if "faction_id" not in data:
-            data["faction_id"] = None
-            changed = True
-
-        # Lifetime Completed
-        if "lifetime_completed" not in data or type(data["lifetime_completed"]) is not int:
-            data["lifetime_completed"] = 0
-            changed = True
-
-        # Season Completed
-        if "season_completed" not in data or type(data["season_completed"]) is not int:
-            data["season_completed"] = 0
-            changed = True
-
-        # Daily quest structure
-        dq = data.get("daily_quest", {})
-        if type(dq) is not dict:
-            data["daily_quest"] = {}
-            changed = True
-        else:
-            # Ensure keys exist
-            if "quest_id" not in dq:
-                dq["quest_id"] = None
-            if "assigned_date" not in dq:
-                dq["assigned_date"] = None
-            if "completed" not in dq:
-                dq["completed"] = False
-            if "role_snapshot" not in dq:
-                dq["role_snapshot"] = []
-            data["daily_quest"] = dq
-
-        # --- Inventory migration ---
-        inv = data.get("inventory")
-
-        # Old format = list of InventoryItem dicts
-        if isinstance(inv, list):
-            new_inv = {}
-            for item in inv:
-                name = item.get("item_name")
-                if name:
-                    new_inv[name] = new_inv.get(name, 0) + 1
-            data["inventory"] = new_inv
-            changed = True
-
-        # Missing or wrong type
-        elif not isinstance(inv, dict):
-            data["inventory"] = {}
-            changed = True
-
-        # Save changes
-        if changed:
-            players[user_id] = data
-            repaired += 1
-
-    # Write repaired data back
-    storage.save_players(players)
-
-    await interaction.response.send_message(
-        f"🛠️ Migration complete!\nRepaired **{repaired}** player profiles.",
-        ephemeral=True
-    )
-
-@bot.tree.command(name="quest_admin_reset_user", description="Admin: Reset a user's quest profile completely.",)
+@bot.tree.command(name="quest_admin_wipe_user", description="Admin: Reset a user's quest profile completely.",)
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
     member: discord.Member,
@@ -456,6 +468,32 @@ async def quest_admin_reset_user(
     await interaction.response.send_message(
         f"🧹 Profile reset for **{member.display_name}** "
         f"(ID: {user_id}). They can start fresh with `/quest_today`."
+    )
+
+@bot.tree.command(name="quest_admin_reset_daily",description="ADMIN: Reset a user's daily quest (keeps profile intact).")
+async def quest_admin_reset_daily(
+    interaction: discord.Interaction,
+    member: discord.Member
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    player = quest_manager.get_player(member.id)
+
+    if not player:
+        return await interaction.response.send_message(
+            "⚠️ That user does not have a quest profile.",
+            ephemeral=True
+        )
+
+    # Only reset the daily quest
+    player.daily_quest = {}
+    storage.save_players(quest_manager.players)
+
+    await interaction.response.send_message(
+        f"🟢 Daily quest reset for **{member.display_name}**.\n"
+        "Their profile, XP, and stats were not affected.",
+        ephemeral=True
     )
 
 @bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.",)
@@ -703,13 +741,14 @@ async def quest_board_cmd(interaction: discord.Interaction):
                     board.display_channel_id
                 )
             msg = await channel.fetch_message(board.message_id)
-            await msg.edit(embed=embed)
+            await msg.edit(embed=embed, view=QuestBoardView())
             updated_existing = True
         except Exception:
             updated_existing = False
 
     if not updated_existing:
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed,view=QuestBoardView())
+
         msg = await interaction.original_response()
         board.display_channel_id = msg.channel.id
         board.message_id = msg.id
@@ -807,128 +846,9 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
 
 # ========= PLAYER: Core =========
 
-@bot.tree.command(name="quest_today",description="See your daily Jolly Fox guild quest.",)
+@bot.tree.command(name="quest_today",description="See your daily Jolly Fox guild quest.")
 async def quest_today(interaction: discord.Interaction):
-    user = interaction.user
-    user_id = user.id
-
-    # Collect the user's current Discord role IDs
-    role_ids = [role.id for role in getattr(user, "roles", [])]
-
-    quest_id = quest_manager.assign_daily(user_id, role_ids)
-    player = quest_manager.get_player(user_id)
-
-    # If no quest is available for current roles
-    if quest_id is None:
-        await interaction.response.send_message(
-            "🦊 There are no quests available for your current roles right now.\n\n"
-            "If you join a new guild faction or RP group later today, "
-            "you can try `/quest_today` again.",
-            ephemeral=True,
-        )
-        return
-
-    template = quest_manager.get_template(quest_id)
-
-    if template is None:
-        await interaction.response.send_message(
-            "⚠️ Error loading your quest. No templates found or quest is invalid.",
-            ephemeral=True,
-        )
-        return
-
-    completed = bool(player.daily_quest.get("completed"))
-
-    status_label = "✅ COMPLETED" if completed else "🟠 ACTIVE"
-    qtype_str = template.type.value
-
-    header = f"**🦊 Your Daily Quest — {status_label}**\n"
-
-    # Start building body
-    body = f"**Name:** {template.name}\n"
-
-    # If SKILL quest → show success/fail scoring
-    if template.type == QuestType.SKILL:
-        body += f"**Success:** {template.points_on_success or 0} pts\n"
-        body += f"**Fail:** {template.points_on_fail or 0} pts\n\n"
-    else:
-        # All other quest types use the base points value
-        body += f"**Points:** {template.points}\n\n"
-
-    # Summary is always shown
-    body += f"**Summary:** {template.summary}\n"
-
-
-    hint_lines: list[str] = []
-
-    if template.type == QuestType.SOCIAL:
-        if template.required_channel_id:
-            hint_lines.append(
-                f"• Go to <#{template.required_channel_id}> and use `/quest_npc`."
-            )
-        else:
-            hint_lines.append("• Use `/quest_npc` in the appropriate RP channel.")
-        if template.npc_id:
-            hint_lines.append(f"• Required NPC: `{template.npc_id}`")
-
-    elif template.type == QuestType.SKILL:
-        if template.required_channel_id:
-            hint_lines.append(
-                f"• Go to <#{template.required_channel_id}> and use `/quest_skill`."
-            )
-        else:
-            hint_lines.append("• Use `/quest_skill` to attempt your training roll.")
-        if template.dc:
-            hint_lines.append(f"• Target DC: **{template.dc}**")
-
-    elif template.type == QuestType.TRAVEL:
-        if not template.required_channel_id:
-            hint_lines.append(
-                "⚠️ This TRAVEL quest is misconfigured (no required_channel_id). "
-                "Please tell an admin."
-            )
-        else:
-            hint_lines.append(
-                f"• Go to <#{template.required_channel_id}> and use `/quest_checkin`."
-            )
-
-    elif template.type == QuestType.FETCH:
-        src = template.source_channel_id
-        turnin = template.turnin_channel_id
-
-        if not src or not turnin:
-            hint_lines.append(
-                "⚠️ This FETCH quest is misconfigured (missing source/turn-in channel). "
-                "Please tell an admin."
-            )
-        else:
-            hint_lines.append(
-                f"• First, go to <#{src}> and use `/quest_fetch` to gather the item."
-            )
-            hint_lines.append(
-                f"• Then, go to <#{turnin}> and use `/quest_turnin` to complete the quest."
-            )
-
-        if template.item_name:
-            hint_lines.append(f"• Required item: **{template.item_name}**")
-
-    else:
-        hint_lines.append("• Use the appropriate quest command for this type.")
-
-    if completed:
-        footer = (
-            "\n\n✨ You’ve already completed this quest for today. "
-            "Come back tomorrow for a new one, or ask an admin to reset your quest if you're testing."
-        )
-    else:
-        footer = "\n\n✨ Complete this quest to earn guild points for today."
-
-    hint_text = ""
-    if hint_lines:
-        hint_text = "\n\n**How to complete it:**\n" + "\n".join(hint_lines)
-
-    msg = header + "\n" + body + hint_text + footer
-    await interaction.response.send_message(msg)
+    await send_daily_quest(interaction)
 
 @bot.tree.command(name="quest_profile",description="View your Jolly Fox Guild profile.")
 async def quest_profile(interaction: discord.Interaction):
