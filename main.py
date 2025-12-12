@@ -12,6 +12,7 @@ from systems.quests.quest_models import QuestType, QuestTemplate
 from systems.quests.factions import get_faction, FACTIONS
 from systems.quests.npc_models import NPC
 from systems.quests import storage
+from systems.quests.storage import QUESTS_FILE
 
 
 # ========= Constants / IDs =========
@@ -263,7 +264,6 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
 def validate_quest_data(quests: dict) -> tuple[bool, str]:
     """Validate quest JSON before import."""
-    from systems.quests.quest_models import QuestType
 
     for qid, q in quests.items():
         if not isinstance(q, dict):
@@ -425,33 +425,21 @@ class QuestBoardView(discord.ui.View):
     ):
         await send_daily_quest(interaction)
 
+def require_admin(interaction: discord.Interaction) -> bool:
+    return interaction.user.guild_permissions.manage_guild
+
+
 
 # ========= ADMIN: Maintenance =========
-
-@bot.tree.command(name="quest_admin_clear_commands")
-async def quest_admin_clear_commands(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
-
-    bot.tree.clear_commands(guild=None)
-    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-    await interaction.response.send_message(
-        "✅ Command cache cleared and re-synced.",
-        ephemeral=True
-    )
 
 @bot.tree.command(name="quest_admin_wipe_user", description="Admin: Reset a user's quest profile completely.",)
 async def quest_admin_reset_user(
     interaction: discord.Interaction,
     member: discord.Member,
 ):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     user_id = member.id
 
@@ -498,12 +486,9 @@ async def quest_admin_reset_daily(
 
 @bot.tree.command(name="quest_admin_cleanup", description="Admin: remove quest profiles for users no longer in the server.",)
 async def quest_admin_cleanup(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
 
     guild = interaction.guild
     valid_ids = {member.id for member in guild.members}
@@ -532,8 +517,6 @@ async def ping(interaction: discord.Interaction):
 async def quest_import(interaction: discord.Interaction, file: discord.Attachment, mode: str = "overwrite"):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
-
-    from systems.quests.storage import QUESTS_FILE
 
     if mode not in ("overwrite", "merge"):
         return await interaction.response.send_message("❌ Mode must be overwrite or merge.", ephemeral=True)
@@ -574,7 +557,6 @@ async def quest_export(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
-    from systems.quests.storage import QUESTS_FILE
 
     # Load the raw quests.json file exactly as-is
     try:
@@ -603,12 +585,9 @@ async def quest_export(interaction: discord.Interaction):
 
 @bot.tree.command(name="quest_admin_list_quests",description="Admin: List all quest templates.",)
 async def quest_admin_list_quests(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
 
     if not quest_manager.quest_templates:
         await interaction.response.send_message(
@@ -640,8 +619,6 @@ async def npc_import(
 
     if mode not in ("overwrite", "merge"):
         return await interaction.response.send_message("❌ Mode must be 'overwrite' or 'merge'.", ephemeral=True)
-
-    from systems.quests import storage
 
     # Read uploaded JSON
     try:
@@ -679,8 +656,6 @@ async def npc_export(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
-    from systems.quests import storage
-
     npcs = storage.load_npcs()
     serializable = {npc_id: npc.to_dict() for npc_id, npc in npcs.items()}
     content = json.dumps(serializable, indent=4)
@@ -701,12 +676,8 @@ async def npc_export(interaction: discord.Interaction):
 
 @bot.tree.command(name="quest_admin_list_npcs",description="Admin: List all quest NPCs.",)
 async def quest_admin_list_npcs(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     if not quest_manager.npcs:
         await interaction.response.send_message(
@@ -766,12 +737,8 @@ async def quest_admin_set_season(
     season_goal: int,
     season_reward: str | None = None,
 ):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     board = quest_manager.quest_board
     board.reset_season(season_id)
@@ -792,12 +759,8 @@ async def quest_admin_set_board_meta(
     season_goal: int | None = None,
     season_reward: str | None = None,
 ):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     if season_goal is None and season_reward is None:
         await interaction.response.send_message(
@@ -823,12 +786,8 @@ async def quest_admin_set_board_meta(
 
 @bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset global and faction points for the current season.",)
 async def quest_admin_reset_board(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        await interaction.response.send_message(
-            "❌ You do not have permission to use this.",
-            ephemeral=True,
-        )
-        return
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
     board = quest_manager.quest_board
     board.global_points = 0
