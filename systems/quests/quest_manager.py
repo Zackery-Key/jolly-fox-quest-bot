@@ -102,9 +102,11 @@ class QuestManager:
         ):
             return player.daily_quest.get("quest_id")
         
-        # 🧹 NEW: Day changed — clear old daily quest state and fetch items
-        if player.daily_quest.get("assigned_date"):
-            # Inventory currently only contains FETCH items, so clear it safely
+        # 🧹 Day changed — clear old daily quest state
+        if (
+            player.daily_quest.get("assigned_date")
+            and player.daily_quest.get("assigned_date") != today
+        ):
             player.inventory.clear()
             player.daily_quest = {}
 

@@ -420,6 +420,25 @@ async def send_daily_quest(interaction: discord.Interaction):
     quest_id = quest_manager.assign_daily(user_id, role_ids)
     player = quest_manager.get_player(user_id)
 
+    # -----------------------------------------
+    # UX: Already completed today's quest
+    # -----------------------------------------
+    if (
+        player.daily_quest.get("assigned_date") == str(date.today())
+        and player.daily_quest.get("completed")
+    ):
+        tmpl = quest_manager.get_template(player.daily_quest.get("quest_id"))
+
+        await interaction.response.send_message(
+            (
+                "✅ **You've already completed today's quest!**\n\n"
+                f"**Quest:** {tmpl.name if tmpl else 'Unknown'}\n\n"
+                "🕒 Come back tomorrow for a new one."
+            ),
+            ephemeral=True,
+        )
+        return
+    
     if quest_id is None:
         await interaction.response.send_message(
             "🦊 There are no quests available for your current roles right now.\n\n"
