@@ -416,17 +416,15 @@ def validate_npc_data(npcs: dict) -> tuple[bool, str]:
 async def send_daily_quest(interaction: discord.Interaction):
     user = interaction.user
     user_id = user.id
+    today = str(date.today())
 
-    role_ids = [role.id for role in getattr(user, "roles", [])]
+    # Get or create player FIRST
+    player = quest_manager.get_or_create_player(user_id)
 
-    quest_id = quest_manager.assign_daily(user_id, role_ids)
-    player = quest_manager.get_player(user_id)
-
-    # -----------------------------------------
-    # UX: Already completed today's quest
-    # -----------------------------------------
+    # 🛑 HARD STOP — already completed today
     if (
-        player.daily_quest.get("assigned_date") == str(date.today())
+        player.daily_quest
+        and player.daily_quest.get("assigned_date") == today
         and player.daily_quest.get("completed")
     ):
         tmpl = quest_manager.get_template(player.daily_quest.get("quest_id"))
@@ -440,15 +438,27 @@ async def send_daily_quest(interaction: discord.Interaction):
             ephemeral=True,
         )
         return
-    
-    if quest_id is None:
-        await interaction.response.send_message(
-            "🦊 There are no quests available for your current roles right now.\n\n"
-            "If you join a new guild faction or RP group later today, "
-            "you can try again.",
-            ephemeral=True,
-        )
-        return
+
+    # 📜 If they already have an active daily today, just show it
+    if (
+        player.daily_quest
+        and player.daily_quest.get("assigned_date") == today
+        and not player.daily_quest.get("completed")
+    ):
+        quest_id = player.daily_quest.get("quest_id")
+    else:
+        # ✅ SAFE: assign a new daily quest
+        role_ids = [role.id for role in getattr(user, "roles", [])]
+        quest_id = quest_manager.assign_daily(user_id, role_ids)
+
+        if quest_id is None:
+            await interaction.response.send_message(
+                "🦊 There are no quests available for your current roles right now.\n\n"
+                "If you join a new guild faction or RP group later today, "
+                "you can try again.",
+                ephemeral=True,
+            )
+            return
 
     template = quest_manager.get_template(quest_id)
     if template is None:
@@ -494,7 +504,8 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     elif template.type == QuestType.FETCH:
         hint_lines.append(
-            f"• Go to <#{template.source_channel_id}> and gather the item with `/quest_fetch`, then deliver to <#{template.turnin_channel_id}> and use `/quest_turnin`."
+            f"• Go to <#{template.source_channel_id}> and gather the item with `/quest_fetch`, "
+            f"then deliver to <#{template.turnin_channel_id}> and use `/quest_turnin`."
         )
         if template.item_name:
             hint_lines.append(f"• Required item: **{template.item_name}**")
@@ -518,7 +529,7 @@ async def send_daily_quest(interaction: discord.Interaction):
         + footer
     )
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg)
 
 class QuestBoardView(discord.ui.View):
     def __init__(self):
