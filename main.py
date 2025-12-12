@@ -7,7 +7,7 @@ from discord.ext import commands
 import io
 import json
 
-from systems.quests.npc_models import get_npc_quest_dialogue
+from systems.quests.quest_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
 from systems.quests.quest_models import QuestType, QuestTemplate
 from systems.quests.factions import get_faction, FACTIONS
