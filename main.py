@@ -1196,7 +1196,14 @@ async def quest_turnin(interaction: discord.Interaction):
 
     # 📜 Get NPC dialogue FIRST (while quest is still active)
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
-    dialogue = get_npc_quest_dialogue(npc, template) if npc else None
+    dialogue = get_npc_quest_dialogue(npc, template)
+
+    npc_name = npc.name if npc else "The Guild"
+    reply = (
+        dialogue
+        if dialogue
+        else f"You turn in **{template.item_name}** to the guild."
+    )
 
     # 📦 Consume item
     player.consume_item(template.item_name)
@@ -1209,9 +1216,8 @@ async def quest_turnin(interaction: discord.Interaction):
     quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
-
     await interaction.response.send_message(
-        f"📬 {dialogue or f'You turn in **{item_name}** to the guild.'}\n\n"
+        f"📬 **{npc_name}** says:\n> {reply}\n\n"
         f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
