@@ -1085,7 +1085,7 @@ async def quest_skill(interaction: discord.Interaction):
     else:
         msg += "\n\nYou complete the task without comment."
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg)
 
 @bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def quest_checkin(interaction: discord.Interaction):
@@ -1114,8 +1114,7 @@ async def quest_checkin(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"🚶 {dialogue or 'You check in at your destination.'}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points.",
-        ephemeral=True,
+        f"✨ **Quest complete!** You earned **{template.points}** guild points."
     )
 
 @bot.tree.command(name="quest_fetch",description="Collect the required item for a FETCH quest.")
