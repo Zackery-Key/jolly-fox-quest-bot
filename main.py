@@ -155,6 +155,95 @@ def build_board_embed():
 
     return embed
 
+def build_profile_embed(
+    viewer: discord.Member,
+    target: discord.Member,
+    player
+) -> discord.Embed:
+    """Build a public-facing guild profile embed."""
+
+    level = player.level
+    xp = player.xp
+    next_xp = player.next_level_xp
+
+    # XP Progress Bar
+    filled = int((xp / next_xp) * 10) if next_xp > 0 else 0
+    bar = "█" * filled + "░" * (10 - filled)
+
+    # Faction info
+    faction = get_faction(player.faction_id)
+    faction_name = faction.name if faction else "None"
+    faction_icon = faction.emoji if faction else "❔"
+
+    # Daily quest (public-safe)
+    dq = player.daily_quest
+    if dq.get("quest_id"):
+        tmpl = quest_manager.get_template(dq["quest_id"])
+        status = "Completed" if dq.get("completed") else "Active"
+        dq_text = f"{tmpl.name} ({status})" if tmpl else "Unknown quest"
+    else:
+        dq_text = "No quest today"
+
+    # Inventory visibility
+    if viewer.id == target.id and player.inventory:
+        inv_lines = [
+            f"- **{name}** × {qty}"
+            for name, qty in player.inventory.items()
+        ]
+        inv_text = "\n".join(inv_lines)
+    elif viewer.id == target.id:
+        inv_text = "_Empty_"
+    else:
+        inv_text = "_Private_"
+
+    embed = discord.Embed(
+        title=f"🦊 {target.display_name} — Guild Profile",
+        color=discord.Color.orange(),
+    )
+
+    embed.set_thumbnail(url=target.display_avatar.url)
+
+    embed.add_field(
+        name="📘 Level & Experience",
+        value=(
+            f"**Level:** {level}\n"
+            f"**XP:** {xp} / {next_xp}\n"
+            f"`{bar}`"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🏅 Faction",
+        value=f"{faction_icon} **{faction_name}**",
+        inline=True,
+    )
+
+    embed.add_field(
+        name="🎯 Daily Quest",
+        value=dq_text,
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🏆 Quest Completion",
+        value=(
+            f"**Seasonal Completed:** {player.season_completed}\n"
+            f"**Lifetime Completed:** {player.lifetime_completed}"
+        ),
+        inline=True,
+    )
+
+    embed.add_field(
+        name="🎒 Inventory",
+        value=inv_text,
+        inline=False,
+    )
+
+    embed.set_footer(text="Jolly Fox Guild — Adventure Awaits")
+
+    return embed
+
 async def refresh_quest_board(bot: commands.Bot):
     """Update the existing quest board message if we have one saved."""
     board = quest_manager.quest_board
@@ -412,19 +501,31 @@ async def send_daily_quest(interaction: discord.Interaction):
 
 class QuestBoardView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=None)  # persistent view
+        super().__init__(timeout=None)
 
     @discord.ui.button(
         label="🦊 View Daily Quest",
         style=discord.ButtonStyle.primary,
         custom_id="quest_board:view_daily"
     )
-    async def view_daily(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def view_daily(self, interaction: discord.Interaction, button: discord.ui.Button):
         await send_daily_quest(interaction)
+
+    @discord.ui.button(
+        label="📘 View Profile",
+        style=discord.ButtonStyle.secondary,
+        custom_id="quest_board:view_profile"
+    )
+    async def view_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player = quest_manager.get_or_create_player(interaction.user.id)
+
+        embed = build_profile_embed(
+            viewer=interaction.user,
+            target=interaction.user,
+            player=player,
+        )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild
@@ -824,118 +925,32 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
 async def quest_today(interaction: discord.Interaction):
     await send_daily_quest(interaction)
 
-@bot.tree.command(name="quest_profile",description="View your Jolly Fox Guild profile.")
-async def quest_profile(interaction: discord.Interaction):
-    user = interaction.user
-    user_id = user.id
+@bot.tree.command(name="profile", description="View your Jolly Fox Guild profile.")
+async def profile(interaction: discord.Interaction):
+    player = quest_manager.get_or_create_player(interaction.user.id)
 
-    player = quest_manager.get_or_create_player(user_id)
-
-    # Basic fields
-    level = player.level
-    xp = player.xp
-    next_xp = player.next_level_xp
-
-    # XP Progress Bar
-    filled = int((xp / next_xp) * 10) if next_xp > 0 else 0
-    bar = "█" * filled + "░" * (10 - filled)
-
-    # Faction info
-    faction = get_faction(player.faction_id)
-    faction_name = faction.name if faction else "None"
-    faction_icon = faction.emoji if faction else "❔"
-
-    # Daily quest status
-    dq = player.daily_quest
-    has_dq = bool(dq.get("quest_id"))
-    dq_text = ""
-
-    if has_dq:
-        qid = dq["quest_id"]
-        tmpl = quest_manager.get_template(qid)
-        status = "Completed" if dq.get("completed") else "Active"
-
-        if tmpl:
-            dq_text = (
-                f"**{tmpl.name}**\n"
-                f"Status: **{status}**\n"
-                f"*{tmpl.summary}*"
-            )
-        else:
-            dq_text = "⚠️ (Quest template missing)"
-
-    else:
-        dq_text = "No quest assigned today. Use `/quest_today`."
-
-    # Inventory formatting
-    if player.inventory:
-        inv_lines = [f"- **{name}** × {qty}" for name, qty in player.inventory.items()]
-        inv_text = "\n".join(inv_lines)
-    else:
-        inv_text = "_Empty_"
-
-
-    # Seasonal stats
-    lifetime = player.lifetime_completed
-    seasonal = player.season_completed
-
-
-
-    # --- Build Embed ---
-    embed = discord.Embed(
-        title=f"🦊 {user.display_name} — Guild Profile",
-        color=discord.Color.orange(),
+    embed = build_profile_embed(
+        viewer=interaction.user,
+        target=interaction.user,
+        player=player,
     )
-
-    # Thumbnail = avatar
-    embed.set_thumbnail(url=user.display_avatar.url)
-
-    # Core stats
-    embed.add_field(
-        name="📘 Level & Experience",
-        value=(
-            f"**Level:** {level}\n"
-            f"**XP:** {xp} / {next_xp}\n"
-            f"`{bar}`"
-        ),
-        inline=False,
-    )
-
-    # Faction
-    embed.add_field(
-        name="🏅 Faction",
-        value=f"{faction_icon} **{faction_name}**",
-        inline=True,
-    )
-
-    # Daily quest
-    embed.add_field(
-        name="🎯 Daily Quest",
-        value=dq_text,
-        inline=False,
-    )
-
-    # Progress
-    embed.add_field(
-        name="🏆 Quest Completion",
-        value=(
-            f"**Seasonal Completed:** {seasonal}\n"
-            f"**Lifetime Completed:** {lifetime}"
-        ),
-        inline=True,
-    )
-
-    # Inventory
-    embed.add_field(
-        name="🎒 Inventory",
-        value=inv_text,
-        inline=False,
-    )
-
-    embed.set_footer(text="Jolly Fox Guild — Adventure Awaits")
 
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="profile_user",description="View another guild member’s profile.")
+async def profile_user(
+    interaction: discord.Interaction,
+    member: discord.Member,
+):
+    player = quest_manager.get_or_create_player(member.id)
+
+    embed = build_profile_embed(
+        viewer=interaction.user,
+        target=member,
+        player=player,
+    )
+
+    await interaction.response.send_message(embed=embed)
 
 
 # ========= PLAYER: Quest Actions =========
