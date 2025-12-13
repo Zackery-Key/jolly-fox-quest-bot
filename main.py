@@ -1064,7 +1064,7 @@ async def quest_npc(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user_id, faction_id)
     await refresh_quest_board(interaction.client)
 
     # -------------------------------------------------------------
@@ -1118,7 +1118,7 @@ async def quest_skill(interaction: discord.Interaction):
 
     if gained > 0:
         faction_id = get_member_faction_id(interaction.user)
-        quest_manager.award_points(interaction.user.id, gained, faction_id)
+        quest_manager.award_points(interaction.user_id, faction_id)
         await refresh_quest_board(interaction.client)
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
@@ -1165,7 +1165,7 @@ async def quest_checkin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user_id, faction_id)
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
@@ -1270,7 +1270,7 @@ async def quest_turnin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user_id, faction_id)
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
