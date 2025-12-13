@@ -485,14 +485,14 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     if template.type == QuestType.SOCIAL:
         hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_npc`."
+            f"• Go to <#{template.required_channel_id}> and use `/talk`."
         )
         if template.npc_id:
             hint_lines.append(f"• Required NPC: `{template.npc_id}`")
 
     elif template.type == QuestType.SKILL:
         hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_skill`."
+            f"• Go to <#{template.required_channel_id}> and use `/skill`."
         )
         if template.dc:
             hint_lines.append(f"• Target DC: **{template.dc}**")
@@ -504,8 +504,8 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     elif template.type == QuestType.FETCH:
         hint_lines.append(
-            f"• Go to <#{template.source_channel_id}> and gather the item with `/quest_fetch`, "
-            f"then deliver to <#{template.turnin_channel_id}> and use `/quest_turnin`."
+            f"• Go to <#{template.source_channel_id}> and gather the item with `/fetch`, "
+            f"then deliver to <#{template.turnin_channel_id}> and use `/turnin`."
         )
         if template.item_name:
             hint_lines.append(f"• Required item: **{template.item_name}**")
@@ -989,7 +989,6 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
 
 
 
-
 # ========= PLAYER: Core =========
 
 @bot.tree.command(name="quest_today",description="See your daily Jolly Fox guild quest.")
@@ -1026,8 +1025,8 @@ async def profile_user(
 
 # ========= PLAYER: Quest Actions =========
 
-@bot.tree.command(name="quest_npc",description="Speak with the required NPC to complete your quest.")
-async def quest_npc(interaction: discord.Interaction):
+@bot.tree.command(name="talk",description="Speak with the required NPC to complete your quest.")
+async def talk(interaction: discord.Interaction):
     import random
 
     # Validate daily quest + ensure type = SOCIAL
@@ -1078,8 +1077,8 @@ async def quest_npc(interaction: discord.Interaction):
         footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
     )
 
-@bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
-async def quest_skill(interaction: discord.Interaction):
+@bot.tree.command(name="skill", description="Attempt a SKILL quest roll.")
+async def skill(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.SKILL
     )
@@ -1176,8 +1175,8 @@ async def quest_checkin(interaction: discord.Interaction):
     footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
     )
 
-@bot.tree.command(name="quest_fetch",description="Collect the required item for a FETCH quest.")
-async def quest_fetch(interaction: discord.Interaction):
+@bot.tree.command(name="fetch",description="Collect the required item for a FETCH quest.")
+async def fetch(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
@@ -1197,7 +1196,7 @@ async def quest_fetch(interaction: discord.Interaction):
     if player.has_item_for_quest(template.item_name):
         await interaction.response.send_message(
             "📦 You've already gathered this quest item. "
-            "Head to the quest board and use `/quest_turnin`.",
+            "Head to the guild office and use `/turnin`.",
             ephemeral=True,
         )
         return
@@ -1208,9 +1207,9 @@ async def quest_fetch(interaction: discord.Interaction):
 
     turnin_channel = template.turnin_channel_id or 0
     turnin_hint = (
-        f"<#{turnin_channel}> with `/quest_turnin`"
+        f"<#{turnin_channel}> with `/turnin`"
         if turnin_channel
-        else "`/quest_turnin` in the quest board channel"
+        else "`/turnin` in the guild office channel"
     )
 
     await interaction.response.send_message(
@@ -1218,8 +1217,8 @@ async def quest_fetch(interaction: discord.Interaction):
         f"Now take it to {turnin_hint} to complete your quest."
     )
 
-@bot.tree.command(name="quest_turnin", description="Turn in the collected item for your FETCH quest.")
-async def quest_turnin(interaction: discord.Interaction):
+@bot.tree.command(name="turnin", description="Turn in the collected item for your FETCH quest.")
+async def turnin(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
@@ -1237,7 +1236,7 @@ async def quest_turnin(interaction: discord.Interaction):
     if not player.has_item_for_quest(template.item_name):
         await interaction.response.send_message(
             "❌ You don't have the required quest item yet. "
-            "Use `/quest_fetch` in the correct channel first.",
+            "Use `/fetch` in the correct channel first.",
             ephemeral=True,
         )
         return
@@ -1282,7 +1281,6 @@ async def quest_turnin(interaction: discord.Interaction):
 
 
 
-
 # ========= Events =========
 
 @bot.event
@@ -1292,7 +1290,6 @@ async def setup_hook():
     # Copy all global commands into the guild
     bot.tree.copy_global_to(guild=guild)
 
-
 @bot.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
@@ -1300,12 +1297,10 @@ async def on_ready():
     print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
     print(f"Logged in as {bot.user}")
 
-
 @bot.event
 async def on_member_remove(member: discord.Member):
     user_id = member.id
     if quest_manager.clear_player(user_id):
         print(f"[CLEANUP] Removed player data for {member.display_name} ({user_id})")
-
 
 bot.run(TOKEN)
