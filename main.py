@@ -562,6 +562,31 @@ class QuestBoardView(discord.ui.View):
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild
 
+async def send_npc_response(
+    interaction: discord.Interaction,
+    npc,
+    dialogue: str,
+    title: str,
+    footer: str | None = None,
+    color: discord.Color = discord.Color.blurple(),
+):
+    embed = discord.Embed(
+        title=title,
+        description=f"> {dialogue}",
+        color=color,
+    )
+
+    if npc:
+        embed.set_author(
+            name=npc.name,
+            icon_url=npc.avatar_url if npc.avatar_url else discord.Embed.Empty,
+        )
+
+    if footer:
+        embed.add_field(name="\u200b", value=footer, inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
 
 
 # ========= ADMIN: Maintenance =========
@@ -1045,9 +1070,12 @@ async def quest_npc(interaction: discord.Interaction):
     # -------------------------------------------------------------
     # Send message
     # -------------------------------------------------------------
-    await interaction.response.send_message(
-        f"**{npc.name}** says:\n> {reply_text}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points."
+    await send_npc_response(
+        interaction,
+        npc=npc,
+        dialogue=reply_text,
+        title="Conversation Complete",
+        footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
     )
 
 @bot.tree.command(name="quest_skill", description="Attempt a SKILL quest roll.")
@@ -1077,12 +1105,15 @@ async def quest_skill(interaction: discord.Interaction):
         f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
     )
 
-    # Get NPC dialogue if available
-    dialogue = None
-    if template.npc_id:
-        npc = quest_manager.get_npc(template.npc_id)
-        dialogue = get_npc_quest_dialogue(npc, template, success=success)
+    # 📜 Get NPC dialogue FIRST (if any)
+    npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
+    dialogue = (
+        get_npc_quest_dialogue(npc, template, success=success)
+        if npc
+        else None
+    )
 
+    # ✅ Complete quest
     quest_manager.complete_daily(interaction.user.id)
 
     if gained > 0:
@@ -1090,13 +1121,29 @@ async def quest_skill(interaction: discord.Interaction):
         quest_manager.award_points(interaction.user.id, gained, faction_id)
         await refresh_quest_board(interaction.client)
 
-    msg = result_text
-    if dialogue:
-        msg += f"\n\n**{npc.name}** says:\n> {dialogue}"
-    else:
-        msg += "\n\nYou complete the task without comment."
+    # 🎭 NPC = embed | ⚙️ No NPC = text
+    if npc:
+        reply = dialogue or "The training concludes."
 
-    await interaction.response.send_message(msg)
+        embed = build_npc_embed(
+            npc=npc,
+            dialogue=f"> {reply}\n\n{result_text}\n\n"
+                     f"✨ You earned **{gained}** guild points."
+                     if gained > 0 else
+                     f"> {reply}\n\n{result_text}",
+            title="Training Complete",
+        )
+
+        await interaction.response.send_message(embed=embed)
+
+    else:
+        msg = result_text
+        if gained > 0:
+            msg += f"\n\n✨ You earned **{gained}** guild points."
+        else:
+            msg += "\n\nYou complete the task."
+
+        await interaction.response.send_message(msg)
 
 @bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def quest_checkin(interaction: discord.Interaction):
@@ -1123,9 +1170,12 @@ async def quest_checkin(interaction: discord.Interaction):
     quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
-    await interaction.response.send_message(
-        f"🚶 {dialogue or 'You check in at your destination.'}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points."
+    await send_npc_response(
+    interaction,
+    npc=npc,
+    dialogue=dialogue or "You check in at your destination.",
+    title="Arrival Confirmed",
+    footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
     )
 
 @bot.tree.command(name="quest_fetch",description="Collect the required item for a FETCH quest.")
@@ -1216,10 +1266,13 @@ async def quest_turnin(interaction: discord.Interaction):
     quest_manager.award_points(interaction.user.id, template.points, faction_id)
     await refresh_quest_board(interaction.client)
 
-    await interaction.response.send_message(
-        f"📬 **{npc_name}** says:\n> {reply}\n\n"
-        f"✨ **Quest complete!** You earned **{template.points}** guild points."
-    )
+    await send_npc_response(
+    interaction,
+    npc=npc,
+    dialogue=reply,
+    title="Quest Turn-In",
+    footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",)
+
 
 
 
