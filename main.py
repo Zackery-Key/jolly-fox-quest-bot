@@ -1105,7 +1105,7 @@ async def quest_skill(interaction: discord.Interaction):
         f"💥 You rolled **{roll}** (DC {dc}) — **You fall short.**"
     )
 
-    # 📜 Get NPC dialogue FIRST (if any)
+    # 📜 Get NPC dialogue FIRST
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
     dialogue = (
         get_npc_quest_dialogue(npc, template, success=success)
@@ -1123,19 +1123,17 @@ async def quest_skill(interaction: discord.Interaction):
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
     if npc:
-        reply = dialogue or "The training concludes."
-
-        embed = build_npc_embed(
+        await send_npc_response(
+            interaction,
             npc=npc,
-            dialogue=f"> {reply}\n\n{result_text}\n\n"
-                     f"✨ You earned **{gained}** guild points."
-                     if gained > 0 else
-                     f"> {reply}\n\n{result_text}",
+            dialogue=dialogue or "The training concludes.",
             title="Training Complete",
+            footer=(
+                f"{result_text}\n\n✨ You earned **{gained}** guild points."
+                if gained > 0
+                else result_text
+            ),
         )
-
-        await interaction.response.send_message(embed=embed)
-
     else:
         msg = result_text
         if gained > 0:
@@ -1246,7 +1244,16 @@ async def quest_turnin(interaction: discord.Interaction):
 
     # 📜 Get NPC dialogue FIRST (while quest is still active)
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
-    dialogue = get_npc_quest_dialogue(npc, template)
+
+    if npc:
+        dialogue = get_npc_quest_dialogue(npc, template)
+
+        # 🛠 FETCH quests should ALWAYS feel acknowledged
+        if not dialogue and template.type == QuestType.FETCH:
+            dialogue = "Oh thank you—this really helps!"
+    else:
+        dialogue = None
+
 
     npc_name = npc.name if npc else "The Guild"
     reply = (
