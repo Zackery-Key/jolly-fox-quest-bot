@@ -529,7 +529,7 @@ async def send_daily_quest(interaction: discord.Interaction):
         + footer
     )
 
-    await interaction.response.send_message(msg)
+    await interaction.response.send_message(msg, ephemeral=True)
 
 class QuestBoardView(discord.ui.View):
     def __init__(self):
