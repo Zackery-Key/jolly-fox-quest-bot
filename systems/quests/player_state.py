@@ -41,7 +41,7 @@ class PlayerState:
     # -----------------------------------------------------
     @property
     def next_level_xp(self) -> int:
-        return self.level * 20
+        return 100 + (self.level - 1) * 50
 
     @property
     def xp_progress(self) -> float:

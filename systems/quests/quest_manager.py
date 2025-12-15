@@ -161,14 +161,10 @@ class QuestManager:
         player.lifetime_completed += 1
         player.season_completed += 1
 
-        # XP
-        xp_gain = 5
-        player.xp += xp_gain
+        # XP — scale from quest value
+        xp_gain = 50  # base XP per quest (safe default)
 
-        # Leveling
-        while player.xp >= player.level * 20:
-            player.xp -= player.level * 20
-            player.level += 1
+        player.add_xp(xp_gain)
 
         storage.save_players(self.players)
         return True
