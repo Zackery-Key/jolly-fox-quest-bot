@@ -1,8 +1,8 @@
 import os
 import json
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "/mnt/data")
+DATA_DIR = "/mnt/data"
+os.makedirs(DATA_DIR, exist_ok=True)
 
 SEASON_FILE = os.path.join(DATA_DIR, "seasonal_event.json")
 
