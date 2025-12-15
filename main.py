@@ -16,6 +16,9 @@ from systems.quests import storage
 from systems.quests.storage import QUESTS_FILE
 from discord import app_commands
 from datetime import date
+from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
+from systems.seasonal.state import get_season_state
+
 
 
 # ========= Constants / IDs =========
@@ -594,6 +597,45 @@ async def log_admin_action(bot, message: str):
     channel = bot.get_channel(POINTS_LOG_CHANNEL_ID)
     if channel:
         await channel.send(message)
+
+
+
+# ========= ADMIN: Seasonal =========
+
+@bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
+@app_commands.default_permissions(manage_guild=True)
+async def season_event(interaction: discord.Interaction):
+    state = get_season_state()
+
+    embed = build_seasonal_embed()
+    view = SeasonalVoteView()
+
+    # If we already have a message, edit it
+    if state["embed"]["channel_id"] and state["embed"]["message_id"]:
+        try:
+            channel = interaction.client.get_channel(state["embed"]["channel_id"])
+            if channel is None:
+                channel = await interaction.client.fetch_channel(state["embed"]["channel_id"])
+
+            msg = await channel.fetch_message(state["embed"]["message_id"])
+            await msg.edit(embed=embed, view=view)
+
+            return await interaction.response.send_message(
+                "🔄 Seasonal event updated.",
+                ephemeral=True,
+            )
+        except Exception:
+            pass  # Fall through to repost
+
+    # Otherwise post new
+    await interaction.response.send_message(embed=embed, view=view)
+    msg = await interaction.original_response()
+
+    state["embed"]["channel_id"] = msg.channel.id
+    state["embed"]["message_id"] = msg.id
+    from systems.seasonal.storage import save_season
+    save_season(state)
+
 
 
 
