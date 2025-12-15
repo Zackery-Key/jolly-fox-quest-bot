@@ -1,5 +1,12 @@
 from dataclasses import dataclass
 from typing import Dict, Optional
+import discord
+
+FACTION_ROLE_IDS = {
+    "shieldborne": 1447646082459762761,
+    "spellfire":   1447646480889548800,
+    "verdant":     1447644562397859921,
+}
 
 
 @dataclass
@@ -36,3 +43,12 @@ def get_faction(faction_id: str) -> Optional[Faction]:
     if not faction_id:
         return None
     return FACTIONS.get(faction_id.lower())
+
+
+def get_member_faction_id(member: discord.Member) -> str | None:
+    role_ids = {role.id for role in member.roles}
+    for faction_id, rid in FACTION_ROLE_IDS.items():
+        if rid in role_ids:
+            return faction_id
+    return None
+

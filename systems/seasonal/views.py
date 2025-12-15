@@ -2,7 +2,7 @@ import discord
 from systems.seasonal.state import get_season_state
 from systems.quests.factions import FACTIONS
 from systems.seasonal.state import register_vote
-from systems.quests.quest_manager import get_member_faction_id
+from systems.quests.factions import get_member_faction_id
 
 
 def build_seasonal_embed():
@@ -39,7 +39,6 @@ def build_seasonal_embed():
     embed.set_footer(text="Votes reset daily • Factionless members cannot vote")
 
     return embed
-
 
 
 class SeasonalVoteView(discord.ui.View):

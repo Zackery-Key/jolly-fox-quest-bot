@@ -18,20 +18,12 @@ from discord import app_commands
 from datetime import date
 from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
 from systems.seasonal.state import get_season_state
+from systems.quests.factions import get_member_faction_id
 
 
 
 # ========= Constants / IDs =========
 
-# Faction role mapping
-SHIELDBORNE_ROLE_ID = 1447646082459762761
-SPELLFIRE_ROLE_ID   = 1447646480889548800
-VERDANT_ROLE_ID     = 1447644562397859921
-FACTION_ROLE_IDS = {
-    "shieldborne": SHIELDBORNE_ROLE_ID,
-    "spellfire":   SPELLFIRE_ROLE_ID,
-    "verdant":     VERDANT_ROLE_ID,
-}
 POINTS_LOG_CHANNEL_ID = 1450165120159191172
 QUEST_POINTS = 5
 
@@ -55,14 +47,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 # ========= Shared Helpers =========
-
-def get_member_faction_id(member: discord.Member) -> str | None:
-    """Return the faction_id for this member based on their Discord roles."""
-    role_ids = {role.id for role in member.roles}
-    for faction_id, rid in FACTION_ROLE_IDS.items():
-        if rid in role_ids:
-            return faction_id
-    return None
 
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
