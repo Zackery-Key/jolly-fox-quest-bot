@@ -30,6 +30,7 @@ FACTION_ROLE_IDS = {
     "verdant":     VERDANT_ROLE_ID,
 }
 POINTS_LOG_CHANNEL_ID = 1450165120159191172
+QUEST_POINTS = 5
 
 # Quest Manager
 quest_manager = QuestManager()
@@ -475,10 +476,10 @@ async def send_daily_quest(interaction: discord.Interaction):
     body = f"**Name:** {template.name}\n"
 
     if template.type == QuestType.SKILL:
-        body += f"**Success:** {template.points_on_success or 0} pts\n"
-        body += f"**Fail:** {template.points_on_fail or 0} pts\n\n"
+        body += f"**Success:** {QUEST_POINTS or 0} pts\n"
+        body += f"**Fail:** {QUEST_POINTS or 0} pts\n\n"
     else:
-        body += f"**Points:** {template.points}\n\n"
+        body += f"**Points:** {QUEST_POINTS}\n\n"
 
     body += f"**Summary:** {template.summary}\n"
 
@@ -1166,7 +1167,7 @@ async def talk(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
     await refresh_quest_board(interaction.client)
 
     # -------------------------------------------------------------
@@ -1177,7 +1178,7 @@ async def talk(interaction: discord.Interaction):
         npc=npc,
         dialogue=reply_text,
         title="Conversation Complete",
-        footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+        footer=f"✨ **Quest complete!** You earned **{QUEST_POINTS}** guild points.",
     )
 
 @bot.tree.command(name="skill", description="Attempt a SKILL quest roll.")
@@ -1200,7 +1201,7 @@ async def skill(interaction: discord.Interaction):
     roll = random.randint(1, 20)
     success = roll >= dc
 
-    gained = template.points_on_success if success else template.points_on_fail or 0
+    gained = QUEST_POINTS if success else QUEST_POINTS or 0
     result_text = (
         f"🎯 You rolled **{roll}** (DC {dc}) — **Success!**"
         if success else
@@ -1267,7 +1268,7 @@ async def quest_checkin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
@@ -1275,7 +1276,7 @@ async def quest_checkin(interaction: discord.Interaction):
     npc=npc,
     dialogue=dialogue or "You check in at your destination.",
     title="Arrival Confirmed",
-    footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",
+    footer=f"✨ **Quest complete!** You earned **{QUEST_POINTS}** guild points.",
     )
 
 @bot.tree.command(name="fetch",description="Collect the required item for a FETCH quest.")
@@ -1372,7 +1373,7 @@ async def turnin(interaction: discord.Interaction):
     quest_manager.complete_daily(interaction.user.id)
 
     faction_id = get_member_faction_id(interaction.user)
-    quest_manager.award_points(interaction.user.id, template.points, faction_id)
+    quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
@@ -1380,7 +1381,7 @@ async def turnin(interaction: discord.Interaction):
     npc=npc,
     dialogue=reply,
     title="Quest Turn-In",
-    footer=f"✨ **Quest complete!** You earned **{template.points}** guild points.",)
+    footer=f"✨ **Quest complete!** You earned **{QUEST_POINTS}** guild points.",)
 
 
 
