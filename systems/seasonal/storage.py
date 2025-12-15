@@ -11,7 +11,7 @@ DEFAULT_SEASON_STATE = {
     "day": 1,
     "date": "",
     "boss": {
-        "name": "Doom Goblin",
+        "name": "Doom Fox",
         "hp": 5000,
         "max_hp": 5000,
         "phase": 1,
