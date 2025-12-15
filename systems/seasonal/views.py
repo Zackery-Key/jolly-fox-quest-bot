@@ -9,6 +9,8 @@ def build_seasonal_embed():
     state = get_season_state()
     boss = state["boss"]
 
+    embed.set_thumbnail(url=boss["avatar_url"])
+
     embed = discord.Embed(
         title=f"🌍 Seasonal Event — {boss['name']}",
         description=(
