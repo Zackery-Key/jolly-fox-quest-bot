@@ -386,8 +386,9 @@ def validate_quest_data(quests: dict) -> tuple[bool, str]:
                     return False, f"Fetch quest '{qid}' missing '{f}'."
 
         if t == "SKILL":
-            if "dc" not in q or "points_on_success" not in q:
-                return False, f"Skill quest '{qid}' missing dc or points_on_success."
+            if "dc" not in q:
+                return False, f"Skill quest '{qid}' missing dc."
+
 
         if t == "TRAVEL":
             if "required_channel_id" not in q:
