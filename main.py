@@ -29,6 +29,7 @@ FACTION_ROLE_IDS = {
     "spellfire":   SPELLFIRE_ROLE_ID,
     "verdant":     VERDANT_ROLE_ID,
 }
+POINTS_LOG_CHANNEL_ID = 1450165120159191172
 
 # Quest Manager
 quest_manager = QuestManager()
@@ -587,6 +588,11 @@ async def send_npc_response(
 
     await interaction.response.send_message(embed=embed)
 
+async def log_admin_action(bot, message: str):
+    channel = bot.get_channel(POINTS_LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(message)
+
 
 
 # ========= ADMIN: Maintenance =========
@@ -919,9 +925,21 @@ async def quest_admin_set_season(
     quest_manager.save_board()
     await refresh_quest_board(interaction.client)
 
+    await log_admin_action(
+        interaction.client,
+        (
+            f"📅 **Season Started / Reset**\n"
+            f"• Season ID: **{season_id}**\n"
+            f"• Goal: **{board.season_goal}** points\n"
+            f"• Reward: {board.season_reward or 'None'}\n"
+            f"• By: {interaction.user.mention}"
+        )
+    )
+
     await interaction.response.send_message(
         f"✅ Season set to **{season_id}** with goal **{board.season_goal}** points.",
         ephemeral=True,
+        
     )
 
 @bot.tree.command(name="quest_admin_set_board_meta",description="Admin: Edit the seasonal goal or reward text without resetting points.")
@@ -951,6 +969,16 @@ async def quest_admin_set_board_meta(
     quest_manager.save_board()
     await refresh_quest_board(interaction.client)
 
+    await log_admin_action(
+        interaction.client,
+        (
+            f"📝 **Season Metadata Updated**\n"
+            f"{f'• New Goal: **{board.season_goal}** points\n' if season_goal is not None else ''}"
+            f"{f'• New Reward: {board.season_reward}\n' if season_reward is not None else ''}"
+            f"• By: {interaction.user.mention}"
+        )
+    )
+
     await interaction.response.send_message(
         "✅ Quest board metadata updated.",
         ephemeral=True,
@@ -978,12 +1006,81 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
 
     await refresh_quest_board(interaction.client)
 
+    await log_admin_action(
+        interaction.client,
+        (
+            f"🧹 **Season Progress Reset**\n"
+            f"• Guild points cleared\n"
+            f"• Faction standings reset\n"
+            f"• Player seasonal progress reset\n"
+            f"• By: {interaction.user.mention}"
+        )
+    )
+    
     await interaction.response.send_message(
         "🧹 **Season reset complete.**\n"
         "• Guild points cleared\n"
         "• Faction standings reset\n"
         "• Player seasonal progress reset\n\n"
         "_Lifetime stats were not affected._",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="quest_admin_adjust_points",description="Admin: Adjust faction or global guild points (add or remove).")
+@app_commands.default_permissions(manage_guild=True)
+async def quest_admin_adjust_points(
+    interaction: discord.Interaction,
+    points: int,
+    faction: str | None = None,
+    reason: str | None = None,
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message(
+            "❌ No permission.",
+            ephemeral=True,
+        )
+
+    board = quest_manager.quest_board
+    actor = interaction.user.mention
+
+    # 🔹 Determine target
+    if faction:
+        faction = faction.lower()
+        if faction not in FACTIONS:
+            return await interaction.response.send_message(
+                f"❌ Invalid faction. Valid options: {', '.join(FACTIONS.keys())}",
+                ephemeral=True,
+            )
+
+        board.faction_points[faction] = board.faction_points.get(faction, 0) + points
+        board.global_points += points
+        target_name = FACTIONS[faction].name
+        target_text = f"Faction: **{target_name}**"
+
+    else:
+        board.global_points += points
+        target_text = "**Global Guild Total**"
+
+    quest_manager.save_board()
+    await refresh_quest_board(interaction.client)
+
+    # 🧾 Build log message
+    log_msg = (
+        f"🛠️ **Guild Point Adjustment**\n"
+        f"• Target: {target_text}\n"
+        f"• Points: **{points:+}**\n"
+        f"• By: {actor}\n"
+        f"{f'• Reason: {reason}' if reason else ''}"
+    )
+
+    # 📢 Send to log channel
+    log_channel = interaction.client.get_channel(POINTS_LOG_CHANNEL_ID)
+    if log_channel:
+        await log_channel.send(log_msg)
+
+    # 🔒 Confirm to admin
+    await interaction.response.send_message(
+        "✅ Points adjusted and logged.",
         ephemeral=True,
     )
 
