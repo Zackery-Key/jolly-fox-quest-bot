@@ -1,0 +1,32 @@
+{
+  "active": false,
+  "day": 1,
+  "date": "",
+  "boss": {
+    "name": "The Verdant Colossus",
+    "hp": 5000,
+    "max_hp": 5000,
+    "phase": 1
+  },
+  "votes": {
+    "shieldborne": {
+      "attack": [],
+      "defend": [],
+      "heal": []
+    },
+    "spellfire": {
+      "attack": [],
+      "defend": [],
+      "heal": []
+    },
+    "verdant": {
+      "attack": [],
+      "defend": [],
+      "heal": []
+    }
+  },
+  "embed": {
+    "channel_id": null,
+    "message_id": null
+  }
+}
