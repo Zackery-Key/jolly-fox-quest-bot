@@ -620,6 +620,76 @@ async def season_event(interaction: discord.Interaction):
     from systems.seasonal.storage import save_season
     save_season(state)
 
+@bot.tree.command(name="season_boss_set",description="Admin: Edit the seasonal boss (name, HP, phase, avatar).")
+@app_commands.default_permissions(manage_guild=True)
+async def season_boss_set(
+    interaction: discord.Interaction,
+    name: str | None = None,
+    hp: int | None = None,
+    max_hp: int | None = None,
+    phase: int | None = None,
+    avatar_url: str | None = None,
+):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message(
+            "❌ No permission.",
+            ephemeral=True,
+        )
+
+    state = get_season_state()
+    boss = state["boss"]
+
+    changes = []
+
+    if name is not None:
+        boss["name"] = name
+        changes.append(f"Name → **{name}**")
+
+    if max_hp is not None:
+        boss["max_hp"] = max(1, max_hp)
+        # Clamp HP if needed
+        boss["hp"] = min(boss["hp"], boss["max_hp"])
+        changes.append(f"Max HP → **{boss['max_hp']}**")
+
+    if hp is not None:
+        boss["hp"] = max(0, min(hp, boss["max_hp"]))
+        changes.append(f"HP → **{boss['hp']}**")
+
+    if phase is not None:
+        boss["phase"] = max(1, phase)
+        changes.append(f"Phase → **{boss['phase']}**")
+
+    if avatar_url is not None:
+        boss["avatar_url"] = avatar_url
+        changes.append("Avatar updated")
+
+    save_season(state)
+
+    # Update embed if posted
+    embed_data = state.get("embed", {})
+    if embed_data.get("channel_id") and embed_data.get("message_id"):
+        channel = interaction.client.get_channel(embed_data["channel_id"])
+        if channel:
+            try:
+                msg = await channel.fetch_message(embed_data["message_id"])
+                await msg.edit(embed=build_seasonal_embed(), view=SeasonalVoteView())
+            except Exception:
+                pass
+
+    # Log change
+    await log_admin_action(
+        interaction.client,
+        (
+            "🐉 **Seasonal Boss Updated**\n"
+            f"• Changes:\n" + "\n".join(f"  - {c}" for c in changes) + "\n"
+            f"• By: {interaction.user.mention}"
+        )
+    )
+
+    await interaction.response.send_message(
+        "✅ Boss updated successfully.",
+        ephemeral=True,
+    )
 
 
 
