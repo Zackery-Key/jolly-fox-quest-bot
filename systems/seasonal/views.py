@@ -9,8 +9,7 @@ def build_seasonal_embed():
     state = get_season_state()
     boss = state["boss"]
 
-    embed.set_thumbnail(url=boss["avatar_url"])
-
+    # ✅ Create embed FIRST
     embed = discord.Embed(
         title=f"🌍 Seasonal Event — {boss['name']}",
         description=(
@@ -22,6 +21,11 @@ def build_seasonal_embed():
         color=discord.Color.dark_green(),
     )
 
+    # ✅ THEN set thumbnail
+    if boss.get("avatar_url"):
+        embed.set_thumbnail(url=boss["avatar_url"])
+
+    # Faction vote breakdown
     for faction_id, faction in FACTIONS.items():
         votes = state["votes"].get(faction_id, {})
         atk = len(votes.get("attack", []))
@@ -41,6 +45,7 @@ def build_seasonal_embed():
     embed.set_footer(text="Votes reset daily • Factionless members cannot vote")
 
     return embed
+
 
 
 class SeasonalVoteView(discord.ui.View):
