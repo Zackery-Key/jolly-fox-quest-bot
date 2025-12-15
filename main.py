@@ -969,15 +969,21 @@ async def quest_admin_set_board_meta(
     quest_manager.save_board()
     await refresh_quest_board(interaction.client)
 
+    log_lines = ["📝 **Season Metadata Updated**"]
+
+    if season_goal is not None:
+        log_lines.append(f"• New Goal: **{board.season_goal}** points")
+
+    if season_reward is not None:
+        log_lines.append(f"• New Reward: {board.season_reward}")
+
+    log_lines.append(f"• By: {interaction.user.mention}")
+
     await log_admin_action(
         interaction.client,
-        (
-            f"📝 **Season Metadata Updated**\n"
-            f"{f'• New Goal: **{board.season_goal}** points\n' if season_goal is not None else ''}"
-            f"{f'• New Reward: {board.season_reward}\n' if season_reward is not None else ''}"
-            f"• By: {interaction.user.mention}"
-        )
+        "\n".join(log_lines)
     )
+
 
     await interaction.response.send_message(
         "✅ Quest board metadata updated.",
@@ -1016,7 +1022,7 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
             f"• By: {interaction.user.mention}"
         )
     )
-    
+
     await interaction.response.send_message(
         "🧹 **Season reset complete.**\n"
         "• Guild points cleared\n"
