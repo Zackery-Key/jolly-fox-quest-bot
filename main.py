@@ -167,11 +167,6 @@ def build_profile_embed(
     # 🎖️ Active Title
     title_text = f"**{player.title}**" if player.title else "_None_"
 
-    embed.add_field(
-        name="🎖️ Title",
-        value=title_text,
-        inline=True,
-    )
     # Faction info
     faction = get_faction(player.faction_id)
     faction_name = faction.name if faction else "None"
@@ -190,11 +185,7 @@ def build_profile_embed(
     else:
         badge_text = "_No badges yet_"
 
-    embed.add_field(
-        name="🏅 Badges",
-        value=badge_text,
-        inline=False,
-)
+
 
     # Daily quest (public-safe)
     dq = player.daily_quest
@@ -235,15 +226,15 @@ def build_profile_embed(
     )
 
     embed.add_field(
-        name="🏅 Faction",
-        value=f"{faction_icon} **{faction_name}**",
+        name="🎖️ Title",
+        value=title_text,
         inline=True,
     )
 
     embed.add_field(
-        name="🎯 Daily Quest",
-        value=dq_text,
-        inline=False,
+        name="🏅 Faction",
+        value=f"{faction_icon} **{faction_name}**",
+        inline=True,
     )
 
     embed.add_field(
@@ -253,6 +244,18 @@ def build_profile_embed(
             f"**Lifetime Completed:** {player.lifetime_completed}"
         ),
         inline=True,
+    )
+
+    embed.add_field(
+        name="🏅 Badges",
+        value=badge_text,
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🎯 Daily Quest",
+        value=dq_text,
+        inline=False,
     )
 
     embed.add_field(
