@@ -22,6 +22,7 @@ from systems.quests.factions import get_member_faction_id
 from systems.seasonal.storage import load_season, save_season
 from systems.badges.definitions import BADGES
 from systems.quests.quest_manager import evaluate_automatic_badges
+from discord import app_commands
 
 
 
@@ -51,6 +52,24 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 # ========= Shared Helpers =========
+
+@bot.tree.command(name="admin_clear_global_commands", description="OWNER ONLY: Clear global slash commands")
+async def admin_clear_global_commands(interaction: discord.Interaction):
+    if interaction.user.id != 449334054878314497:
+        await interaction.response.send_message("❌ Owner only.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    # 🔴 Clear GLOBAL commands
+    bot.tree.clear_commands(guild=None)
+    await bot.tree.sync(guild=None)
+
+    await interaction.followup.send(
+        "✅ Global slash commands wiped. Restart Discord and wait a few minutes.",
+        ephemeral=True,
+    )
+
 
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
