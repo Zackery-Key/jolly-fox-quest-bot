@@ -6,13 +6,18 @@ from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
 
 def evaluate_automatic_badges(player):
-    # First quest
-    if player.lifetime_completed >= 1:
-        player.badges.add("quest_initiate")
+    newly_awarded = []
 
-    # Guild regular
-    if player.lifetime_completed >= 25:
+    if player.lifetime_completed >= 1 and "quest_initiate" not in player.badges:
+        player.badges.add("quest_initiate")
+        newly_awarded.append("quest_initiate")
+
+    if player.lifetime_completed >= 10 and "guild_regular" not in player.badges:
         player.badges.add("guild_regular")
+        newly_awarded.append("guild_regular")
+
+    return newly_awarded
+
 
 class QuestManager:
     def __init__(self):
@@ -161,23 +166,27 @@ class QuestManager:
         player = self.get_or_create_player(user_id)
 
         if player.daily_quest.get("completed"):
-            return False
+            return False, []
 
         player.daily_quest["completed"] = True
 
         # Stats
         player.lifetime_completed += 1
-        evaluate_automatic_badges(player)
+
+        # ✅ CAPTURE newly earned badges
+        new_badges = evaluate_automatic_badges(player)
 
         player.season_completed += 1
 
-        # XP — scale from quest value
-        xp_gain = 50  # base XP per quest (safe default)
-
+        # XP
+        xp_gain = 50
         player.add_xp(xp_gain)
 
         storage.save_players(self.players)
-        return True
+
+        # ✅ RETURN THEM
+        return True, new_badges
+
 
     def save_board(self):
         storage.save_board(self.quest_board)

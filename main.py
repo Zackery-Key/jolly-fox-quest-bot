@@ -28,6 +28,7 @@ from systems.quests.quest_manager import evaluate_automatic_badges
 # ========= Constants / IDs =========
 
 POINTS_LOG_CHANNEL_ID = 1450165120159191172
+BADGE_ANNOUNCE_CHANNEL_ID = 1448903133899259914
 QUEST_POINTS = 5
 
 # Quest Manager
@@ -666,6 +667,61 @@ badge_autocomplete = dict_autocomplete(
     lambda k, v: f"{k} — {v['name']}"
 )
 
+async def announce_badges(
+    bot,
+    member: discord.Member,
+    badge_ids: list[str],
+    source_channel: discord.abc.Messageable | None = None,
+):
+    if not badge_ids:
+        return
+
+    # 🔹 Get Trinity from NPC storage
+    trinity = quest_manager.get_npc("trinity")
+    if not trinity:
+        return  # fail silently if NPC missing
+
+    lines = []
+    for bid in badge_ids:
+        badge = BADGES.get(bid)
+        if badge:
+            lines.append(f"{badge['emoji']} **{badge['name']}**")
+
+    if not lines:
+        return
+
+    message = (
+        f"🎉Congratulations **{member.mention}**!!! You have earned a new badge from the guild! Use /profile to view it.\n"
+        + "\n".join(lines)
+    )
+
+    embed = discord.Embed(
+        description=message,
+        color=discord.Color.gold(),
+    )
+
+    # 🧙 NPC identity (NOT dialogue)
+    embed.set_author(
+        name=trinity.name,
+        icon_url=trinity.avatar_url if trinity.avatar_url else discord.Embed.Empty,
+    )
+
+    # 🔹 Local channel (where quest was completed)
+    if source_channel:
+        try:
+            await source_channel.send(embed=embed)
+        except Exception:
+            pass
+
+    # 🔹 Global badge channel (avoid duplicates)
+    global_channel = bot.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+    if global_channel and (
+        not source_channel or global_channel.id != source_channel.id
+    ):
+        await global_channel.send(embed=embed)
+
+
+
 # ========= ADMIN: Seasonal =========
 
 @bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
@@ -843,6 +899,51 @@ async def badge_revoke(
         ephemeral=True,
     )
 
+@bot.tree.command(name="badge_grant_all",description="Admin: Grant a badge to all guild players.")
+@app_commands.default_permissions(manage_guild=True)
+async def badge_grant_all(
+    interaction: discord.Interaction,
+    badge_id: str,
+):
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    count = 0
+    for player in quest_manager.players.values():
+        if badge_id not in player.badges:
+            player.badges.add(badge_id)
+            count += 1
+
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🏅 Granted badge `{badge_id}` to **{count}** players.",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="badge_grant_role",description="Admin: Grant a badge to all users with a role.")
+@app_commands.default_permissions(manage_guild=True)
+async def badge_grant_role(
+    interaction: discord.Interaction,
+    role: discord.Role,
+    badge_id: str,
+):
+    if not require_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    count = 0
+    for member in role.members:
+        player = quest_manager.get_or_create_player(member.id)
+        if badge_id not in player.badges:
+            player.badges.add(badge_id)
+            count += 1
+
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🏅 Granted badge `{badge_id}` to **{count}** members with role {role.mention}.",
+        ephemeral=True,
+    )
 
 
 # ========= ADMIN: Maintenance =========
@@ -1446,7 +1547,28 @@ async def talk(interaction: discord.Interaction):
     # -------------------------------------------------------------
     # Complete quest + award points
     # -------------------------------------------------------------
-    quest_manager.complete_daily(interaction.user.id)
+    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
+
+    if new_badges:
+        await interaction.followup.send(
+            "🎖️ **New badge unlocked!**\n"
+            + "\n".join(
+                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
+                for b in new_badges
+                if b in BADGES
+            ),
+            ephemeral=True,
+        )
+
+    member = interaction.guild.get_member(interaction.user.id)
+    if member:
+        await announce_badges(
+            interaction.client,
+            member,
+            new_badges,
+            source_channel=interaction.channel,
+    )
+
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
@@ -1499,7 +1621,28 @@ async def skill(interaction: discord.Interaction):
     )
 
     # ✅ Complete quest
-    quest_manager.complete_daily(interaction.user.id)
+    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
+
+    if new_badges:
+        await interaction.followup.send(
+            "🎖️ **New badge unlocked!**\n"
+            + "\n".join(
+                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
+                for b in new_badges
+                if b in BADGES
+            ),
+            ephemeral=True,
+        )
+
+    member = interaction.guild.get_member(interaction.user.id)
+    if member:
+        await announce_badges(
+            interaction.client,
+            member,
+            new_badges,
+            source_channel=interaction.channel,
+    )
+
 
     if gained > 0:
         faction_id = get_member_faction_id(interaction.user)
@@ -1547,7 +1690,27 @@ async def checkin(interaction: discord.Interaction):
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
     dialogue = get_npc_quest_dialogue(npc, template) if npc else None
 
-    quest_manager.complete_daily(interaction.user.id)
+    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
+
+    if new_badges:
+        await interaction.followup.send(
+            "🎖️ **New badge unlocked!**\n"
+            + "\n".join(
+                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
+                for b in new_badges
+                if b in BADGES
+            ),
+            ephemeral=True,
+        )
+
+    member = interaction.guild.get_member(interaction.user.id)
+    if member:
+        await announce_badges(
+            interaction.client,
+            member,
+            new_badges,
+            source_channel=interaction.channel,
+    )
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
@@ -1652,7 +1815,28 @@ async def turnin(interaction: discord.Interaction):
     quest_manager.save_players()
 
     # ✅ Complete quest + award points
-    quest_manager.complete_daily(interaction.user.id)
+    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
+
+    if new_badges:
+        await interaction.followup.send(
+            "🎖️ **New badge unlocked!**\n"
+            + "\n".join(
+                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
+                for b in new_badges
+                if b in BADGES
+            ),
+            ephemeral=True,
+        )
+
+    member = interaction.guild.get_member(interaction.user.id)
+    if member:
+        await announce_badges(
+            interaction.client,
+            member,
+            new_badges,
+            source_channel=interaction.channel,
+    )
+
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
