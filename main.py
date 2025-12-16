@@ -214,6 +214,12 @@ def build_profile_embed(
     )
 
     embed.set_thumbnail(url=target.display_avatar.url)
+    
+    embed.add_field(
+        name="🎖️ Title",
+        value=title_text,
+        inline=False,
+    )
 
     embed.add_field(
         name="📘 Level & Experience",
@@ -226,15 +232,9 @@ def build_profile_embed(
     )
 
     embed.add_field(
-        name="🎖️ Title",
-        value=title_text,
-        inline=True,
-    )
-
-    embed.add_field(
         name="🏅 Faction",
         value=f"{faction_icon} **{faction_name}**",
-        inline=True,
+        inline=False,
     )
 
     embed.add_field(
@@ -243,7 +243,7 @@ def build_profile_embed(
             f"**Seasonal Completed:** {player.season_completed}\n"
             f"**Lifetime Completed:** {player.lifetime_completed}"
         ),
-        inline=True,
+        inline=False,
     )
 
     embed.add_field(
@@ -628,6 +628,43 @@ def grant_badge(player, badge_id: str) -> bool:
 
     return True
 
+def dict_autocomplete(source_dict, label_fn=None):
+    async def _autocomplete(interaction, current: str):
+        results = []
+        for key, value in source_dict.items():
+            if current.lower() in key.lower():
+                label = (
+                    label_fn(key, value)
+                    if label_fn
+                    else key
+                )
+                results.append(
+                    app_commands.Choice(name=label, value=key)
+                )
+        return results[:25]
+    return _autocomplete
+
+async def title_autocomplete(interaction, current: str):
+    player = quest_manager.get_or_create_player(interaction.user.id)
+
+    choices = []
+    for badge_id in player.badges:
+        badge = BADGES.get(badge_id)
+        if not badge:
+            continue
+
+        title = badge["name"]
+        if current.lower() in title.lower():
+            choices.append(
+                app_commands.Choice(name=title, value=title)
+            )
+
+    return choices[:25]
+
+badge_autocomplete = dict_autocomplete(
+    BADGES,
+    lambda k, v: f"{k} — {v['name']}"
+)
 
 # ========= ADMIN: Seasonal =========
 
@@ -741,6 +778,7 @@ async def season_boss_set(
 # ========= ADMIN: Badge =========
 
 @bot.tree.command(name="badge_grant", description="Admin: Grant a badge to a user.")
+@app_commands.autocomplete(badge_id=badge_autocomplete)
 @app_commands.default_permissions(manage_guild=True)
 async def badge_grant(
     interaction: discord.Interaction,
@@ -773,6 +811,7 @@ async def badge_grant(
     )
 
 @bot.tree.command(name="badge_revoke", description="Admin: Revoke a badge from a user.")
+@app_commands.autocomplete(badge_id=badge_autocomplete)
 @app_commands.default_permissions(manage_guild=True)
 async def badge_revoke(
     interaction: discord.Interaction,
@@ -1339,6 +1378,35 @@ async def profile_user(
     )
 
     await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="title_set", description="Set your active guild title.")
+@app_commands.autocomplete(title=title_autocomplete)
+async def title_set(
+    interaction: discord.Interaction,
+    title: str,
+):
+    player = quest_manager.get_or_create_player(interaction.user.id)
+
+    # Safety: make sure they still own it
+    valid_titles = {
+        BADGES[b]["name"]
+        for b in player.badges
+        if b in BADGES
+    }
+
+    if title not in valid_titles:
+        return await interaction.response.send_message(
+            "❌ You don’t have that title unlocked.",
+            ephemeral=True,
+        )
+
+    player.title = title
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🎖️ Your title is now **{title}**.",
+        ephemeral=True,
+    )
 
 
 # ========= PLAYER: Quest Actions =========
