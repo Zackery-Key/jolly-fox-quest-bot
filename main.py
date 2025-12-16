@@ -1861,13 +1861,11 @@ async def turnin(interaction: discord.Interaction):
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-    guild = discord.Object(id=GUILD_ID)
+    # 🔴 WIPE GLOBAL COMMANDS
+    bot.tree.clear_commands()
+    await bot.tree.sync()
 
-    # 🔴 ONE-TIME CLEANUP
-    bot.tree.clear_commands(guild=guild)
-    await bot.tree.sync(guild=guild)
-
-    print("Cleared and resynced guild commands.")
+    print("⚠ Global commands wiped and resynced")
 
 
 @bot.event
