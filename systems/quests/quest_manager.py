@@ -4,6 +4,7 @@ from datetime import date
 from . import storage
 from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
+from main import evaluate_automatic_badges
 
 
 class QuestManager:
@@ -159,6 +160,8 @@ class QuestManager:
 
         # Stats
         player.lifetime_completed += 1
+        evaluate_automatic_badges(player)
+
         player.season_completed += 1
 
         # XP — scale from quest value

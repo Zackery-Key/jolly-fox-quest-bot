@@ -15,7 +15,9 @@ class PlayerState:
     season_completed: int = 0
     xp: int = 0
     level: int = 1
-
+    badges: set[str] = field(default_factory=set)
+    season_victories: set[str] = field(default_factory=set)
+    title: str | None = None
 
     # -----------------------------------------------------
     # Inventory Helpers (FETCH quest support)
@@ -73,6 +75,9 @@ class PlayerState:
             "season_completed": self.season_completed,
             "xp": self.xp,
             "level": self.level,
+            "badges": list(self.badges),
+            "season_victories": list(self.season_victories),
+            "title": self.title,
         }
 
 
@@ -90,4 +95,7 @@ class PlayerState:
             season_completed=data.get("season_completed", 0),
             xp=data.get("xp", 0),
             level=data.get("level", 1),
+            badges=set(data.get("badges", [])),
+            season_victories=set(data.get("season_victories", [])),
+            title=data.get("title"),
         )

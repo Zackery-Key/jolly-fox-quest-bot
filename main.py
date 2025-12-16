@@ -20,6 +20,8 @@ from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
 from systems.seasonal.state import get_season_state
 from systems.quests.factions import get_member_faction_id
 from systems.seasonal.storage import load_season, save_season
+from systems.badges.definitions import BADGES
+from systems.quests.quest_manager import quest_manager
 
 
 
@@ -162,10 +164,37 @@ def build_profile_embed(
     filled = int((xp / next_xp) * 10) if next_xp > 0 else 0
     bar = "█" * filled + "░" * (10 - filled)
 
+    # 🎖️ Active Title
+    title_text = f"**{player.title}**" if player.title else "_None_"
+
+    embed.add_field(
+        name="🎖️ Title",
+        value=title_text,
+        inline=True,
+    )
     # Faction info
     faction = get_faction(player.faction_id)
     faction_name = faction.name if faction else "None"
     faction_icon = faction.emoji if faction else "❔"
+
+    # 🏅 Badges
+    if player.badges:
+        badge_lines = []
+        for badge_id in sorted(player.badges):
+            badge = BADGES.get(badge_id)
+            if badge:
+                badge_lines.append(
+                    f"{badge['emoji']} **{badge['name']}**"
+                )
+        badge_text = "\n".join(badge_lines)
+    else:
+        badge_text = "_No badges yet_"
+
+    embed.add_field(
+        name="🏅 Badges",
+        value=badge_text,
+        inline=False,
+)
 
     # Daily quest (public-safe)
     dq = player.daily_quest
@@ -583,6 +612,28 @@ async def log_admin_action(bot, message: str):
     if channel:
         await channel.send(message)
 
+def grant_badge(player, badge_id: str) -> bool:
+    if badge_id in player.badges:
+        return False
+
+    player.badges.add(badge_id)
+
+    # Set title ONLY if definition exists
+    badge = BADGES.get(badge_id)
+    if badge and not player.title:
+        player.title = badge["name"]
+
+    return True
+
+def evaluate_automatic_badges(player):
+    # First quest
+    if player.lifetime_completed >= 1:
+        player.badges.add("quest_initiate")
+
+    # Guild regular
+    if player.lifetime_completed >= 25:
+        player.badges.add("guild_regular")
+
 
 
 # ========= ADMIN: Seasonal =========
@@ -689,6 +740,74 @@ async def season_boss_set(
 
     await interaction.response.send_message(
         "✅ Boss updated successfully.",
+        ephemeral=True,
+    )
+
+
+
+# ========= ADMIN: Badge =========
+
+@bot.tree.command(name="badge_grant", description="Admin: Grant a badge to a user.")
+@app_commands.default_permissions(manage_guild=True)
+async def badge_grant(
+    interaction: discord.Interaction,
+    member: discord.Member,
+    badge_id: str,
+):
+    if not require_admin(interaction):
+        return await interaction.response.send_message(
+            "❌ You do not have permission to do this.",
+            ephemeral=True,
+        )
+
+    player = quest_manager.get_or_create_player(member.id)
+
+    if badge_id in player.badges:
+        return await interaction.response.send_message(
+            f"ℹ️ **{member.display_name}** already has the badge `{badge_id}`.",
+            ephemeral=True,
+        )
+
+    player.badges.add(badge_id)
+    quest_manager.save_players()
+
+    badge = BADGES.get(badge_id)
+    badge_name = badge["name"] if badge else badge_id
+
+    await interaction.response.send_message(
+        f"🏅 Granted **{badge_name}** to **{member.display_name}**.",
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="badge_revoke", description="Admin: Revoke a badge from a user.")
+@app_commands.default_permissions(manage_guild=True)
+async def badge_revoke(
+    interaction: discord.Interaction,
+    member: discord.Member,
+    badge_id: str,
+):
+    if not require_admin(interaction):
+        return await interaction.response.send_message(
+            "❌ You do not have permission to do this.",
+            ephemeral=True,
+        )
+
+    player = quest_manager.get_or_create_player(member.id)
+
+    if badge_id not in player.badges:
+        return await interaction.response.send_message(
+            f"ℹ️ **{member.display_name}** does not have the badge `{badge_id}`.",
+            ephemeral=True,
+        )
+
+    player.badges.discard(badge_id)
+    quest_manager.save_players()
+
+    badge = BADGES.get(badge_id)
+    badge_name = badge["name"] if badge else badge_id
+
+    await interaction.response.send_message(
+        f"🗑️ Revoked **{badge_name}** from **{member.display_name}**.",
         ephemeral=True,
     )
 
@@ -1201,6 +1320,8 @@ async def quest(interaction: discord.Interaction):
 async def profile(interaction: discord.Interaction):
     player = quest_manager.get_or_create_player(interaction.user.id)
 
+    evaluate_automatic_badges(player)
+
     embed = build_profile_embed(
         viewer=interaction.user,
         target=interaction.user,
@@ -1215,6 +1336,8 @@ async def profile_user(
     member: discord.Member,
 ):
     player = quest_manager.get_or_create_player(member.id)
+
+    evaluate_automatic_badges(player)
 
     embed = build_profile_embed(
         viewer=interaction.user,
