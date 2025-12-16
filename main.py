@@ -438,7 +438,6 @@ def validate_npc_data(npcs: dict) -> tuple[bool, str]:
     return True, "OK"
 
 async def send_daily_quest(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     user = interaction.user
     user_id = user.id
     today = str(date.today())
