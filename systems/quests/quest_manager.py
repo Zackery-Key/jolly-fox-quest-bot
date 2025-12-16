@@ -4,7 +4,6 @@ from datetime import date
 from . import storage
 from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
-from main import evaluate_automatic_badges
 
 def evaluate_automatic_badges(player):
     # First quest
