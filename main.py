@@ -266,21 +266,21 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
     if not player:
         await interaction.response.send_message(
-            "You do not have a guild profile yet. Use `/quest_today` to begin.",
+            "You do not have a guild profile yet. Use `/quest` to begin.",
             ephemeral=True,
         )
         return None, None
 
     if not player.daily_quest:
         await interaction.response.send_message(
-            "🦊 You don't have an active quest today. Use `/quest_today` first.",
+            "🦊 You don't have an active quest today. Use `/quest` first.",
             ephemeral=True,
         )
         return None, None
 
     if "quest_id" not in player.daily_quest:
         await interaction.response.send_message(
-            "⚠️ Your daily quest data is incomplete. Use `/quest_today` to refresh.",
+            "⚠️ Your daily quest data is incomplete. Use `/quest` to refresh.",
             ephemeral=True,
         )
         return None, None
@@ -337,7 +337,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
                 await interaction.response.send_message(
                     "❌ You don't have the required role to complete this quest.\n"
                     "If you believe this is a mistake, please contact an admin.\n"
-                    "You will get a new quest tomorrow with `/quest_today`.",
+                    "You will get a new quest tomorrow with `/quest`.",
                     ephemeral=True,
                 )
                 return None, None
@@ -490,7 +490,7 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     elif template.type == QuestType.TRAVEL:
         hint_lines.append(
-            f"• Go to <#{template.required_channel_id}> and use `/quest_checkin`."
+            f"• Go to <#{template.required_channel_id}> and use `/checkin`."
         )
 
     elif template.type == QuestType.FETCH:
@@ -720,7 +720,7 @@ async def quest_admin_reset_user(
 
     await interaction.response.send_message(
         f"🧹 Profile reset for **{member.display_name}** "
-        f"(ID: {user_id}). They can start fresh with `/quest_today`."
+        f"(ID: {user_id}). They can start fresh with `/quest`."
     )
 
 @bot.tree.command(name="quest_admin_reset_daily",description="ADMIN: Reset a user's daily quest (keeps profile intact).")
@@ -1193,8 +1193,8 @@ async def quest_admin_adjust_points(
 
 # ========= PLAYER: Core =========
 
-@bot.tree.command(name="quest_today",description="See your daily Jolly Fox guild quest.")
-async def quest_today(interaction: discord.Interaction):
+@bot.tree.command(name="quest",description="See your daily Jolly Fox guild quest.")
+async def quest(interaction: discord.Interaction):
     await send_daily_quest(interaction)
 
 @bot.tree.command(name="profile", description="View your Jolly Fox Guild profile.")
@@ -1344,8 +1344,8 @@ async def skill(interaction: discord.Interaction):
 
         await interaction.response.send_message(msg)
 
-@bot.tree.command(name="quest_checkin", description="Complete a TRAVEL quest by checking in at the right location.")
-async def quest_checkin(interaction: discord.Interaction):
+@bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
+async def checkin(interaction: discord.Interaction):
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.TRAVEL
     )
