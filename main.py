@@ -701,25 +701,39 @@ async def announce_badges(
         except Exception:
             pass
 
-    # 🔹 Global badge channel
     try:
         global_channel = bot.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+        print("[Badge Debug] get_channel:", global_channel)
+
         if global_channel is None:
             global_channel = await bot.fetch_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+            print("[Badge Debug] fetch_channel:", global_channel)
 
         if not global_channel:
-            print("[Badge Announce] Badge channel not found")
+            print("[Badge Debug] Global badge channel not found")
             return
+
+        print(
+            "[Badge Debug] Channel guild:",
+            global_channel.guild.id,
+            "Interaction guild:",
+            member.guild.id,
+        )
 
         perms = global_channel.permissions_for(global_channel.guild.me)
-        if not perms.send_messages:
-            print("[Badge Announce] Missing SEND_MESSAGES permission in badge channel")
-            return
+        print(
+            "[Badge Debug] Permissions:",
+            perms.send_messages,
+            perms.embed_links,
+            perms.view_channel,
+        )
 
         await global_channel.send(embed=embed)
+        print("[Badge Debug] Sent to Guild-Office")
 
     except Exception as e:
-        print(f"[Badge Announce] Failed to post in global channel: {e}")
+        print("[Badge Debug] Global send failed:", repr(e))
+
 
 
 
