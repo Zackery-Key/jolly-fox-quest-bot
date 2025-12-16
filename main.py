@@ -714,7 +714,7 @@ async def announce_badges(
             pass
 
     # 🔹 Global badge channel (avoid duplicates)
-    global_channel = bot.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+    global_channel = await bot.fetch_channel(BADGE_ANNOUNCE_CHANNEL_ID)
     if global_channel and (
         not source_channel or global_channel.id != source_channel.id
     ):
@@ -1748,7 +1748,7 @@ async def fetch(interaction: discord.Interaction):
     if player.has_item_for_quest(template.item_name):
         await interaction.followup.send(
             "📦 You've already gathered this quest item. "
-            "Head to the guild office and use `/turnin`.",
+            "Head to the <#{turnin_channel}> and use `/turnin`.",
             ephemeral=True,
         )
         return
