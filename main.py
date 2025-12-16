@@ -298,28 +298,28 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
         player = quest_manager.get_player(user_id)
 
     if not player:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "You do not have a guild profile yet. Use `/quest` to begin.",
             ephemeral=True,
         )
         return None, None
 
     if not player.daily_quest:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "🦊 You don't have an active quest today. Use `/quest` first.",
             ephemeral=True,
         )
         return None, None
 
     if "quest_id" not in player.daily_quest:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "⚠️ Your daily quest data is incomplete. Use `/quest` to refresh.",
             ephemeral=True,
         )
         return None, None
 
     if player.daily_quest.get("completed"):
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "✅ You've already completed today's quest.",
             ephemeral=True,
         )
@@ -329,7 +329,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
     template = quest_manager.get_template(quest_id)
 
     if template is None:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "⚠️ Error: Your quest template could not be found. Please tell an admin.",
             ephemeral=True,
         )
@@ -337,7 +337,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
 
     # Type check (SKILL/SOCIAL/FETCH/TRAVEL)
     if expected_type is not None and template.type != expected_type:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ Your current quest is `{template.type.value}`, "
             f"not `{expected_type.value}`.\nUse the correct command for your quest type.",
             ephemeral=True,
@@ -367,7 +367,7 @@ async def _ensure_active_daily(interaction, expected_type=None, create_if_missin
                 # They never had the required roles for this quest.
                 # This should not happen anymore with the new assignment logic,
                 # but we handle it gracefully.
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "❌ You don't have the required role to complete this quest.\n"
                     "If you believe this is a mistake, please contact an admin.\n"
                     "You will get a new quest tomorrow with `/quest`.",
@@ -1526,14 +1526,14 @@ async def talk(interaction: discord.Interaction):
     # Enforce required channel
     required_channel = template.required_channel_id
     if required_channel and interaction.channel_id != required_channel:
-        return await interaction.response.send_message(
+        return await interaction.followup.send(
             f"❌ You must speak with **{template.npc_id}** in <#{required_channel}>.",
             ephemeral=True,
         )
 
     npc = quest_manager.get_npc(template.npc_id)
     if npc is None:
-        return await interaction.response.send_message(
+        return await interaction.followup.send(
             f"⚠️ Error: NPC `{template.npc_id}` not found.",
             ephemeral=True,
         )
@@ -1596,7 +1596,7 @@ async def skill(interaction: discord.Interaction):
 
     required_channel = template.required_channel_id
     if required_channel and interaction.channel_id != required_channel:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ You must attempt this training in <#{required_channel}>.",
             ephemeral=True,
         )
@@ -1670,7 +1670,7 @@ async def skill(interaction: discord.Interaction):
         else:
             msg += "\n\nYou complete the task."
 
-        await interaction.response.send_message(msg)
+        await interaction.followup.send(msg)
 
 @bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def checkin(interaction: discord.Interaction):
@@ -1683,7 +1683,7 @@ async def checkin(interaction: discord.Interaction):
 
     required_channel = template.required_channel_id or 0
     if required_channel and interaction.channel_id != required_channel:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ You must check in at <#{required_channel}> for this quest.",
             ephemeral=True,
         )
@@ -1737,7 +1737,7 @@ async def fetch(interaction: discord.Interaction):
 
     source_channel = template.source_channel_id or 0
     if source_channel and interaction.channel_id != source_channel:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ You can only gather this in <#{source_channel}>.",
             ephemeral=True,
         )
@@ -1746,7 +1746,7 @@ async def fetch(interaction: discord.Interaction):
     quest_id = player.daily_quest.get("quest_id")
 
     if player.has_item_for_quest(template.item_name):
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "📦 You've already gathered this quest item. "
             "Head to the guild office and use `/turnin`.",
             ephemeral=True,
@@ -1764,7 +1764,7 @@ async def fetch(interaction: discord.Interaction):
         else "`/turnin` in the guild office channel"
     )
 
-    await interaction.response.send_message(
+    await interaction.followup.send(
         f"📦 You gather **{item_name}**.\n\n"
         f"Now take it to {turnin_hint} to complete your quest."
     )
@@ -1780,14 +1780,14 @@ async def turnin(interaction: discord.Interaction):
 
     turnin_channel = template.turnin_channel_id or 0
     if turnin_channel and interaction.channel_id != turnin_channel:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ You must turn this in at <#{turnin_channel}>.",
             ephemeral=True,
         )
         return
 
     if not player.has_item_for_quest(template.item_name):
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ You don't have the required quest item yet. "
             "Use `/fetch` in the correct channel first.",
             ephemeral=True,
