@@ -6,6 +6,14 @@ from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
 from main import evaluate_automatic_badges
 
+def evaluate_automatic_badges(player):
+    # First quest
+    if player.lifetime_completed >= 1:
+        player.badges.add("quest_initiate")
+
+    # Guild regular
+    if player.lifetime_completed >= 25:
+        player.badges.add("guild_regular")
 
 class QuestManager:
     def __init__(self):
