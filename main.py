@@ -1514,7 +1514,7 @@ async def title_set(
 
 @bot.tree.command(name="talk",description="Speak with the required NPC to complete your quest.")
 async def talk(interaction: discord.Interaction):
-    import random
+    await interaction.response.defer()
 
     # Validate daily quest + ensure type = SOCIAL
     player, template = await _ensure_active_daily(
@@ -1587,6 +1587,7 @@ async def talk(interaction: discord.Interaction):
 
 @bot.tree.command(name="skill", description="Attempt a SKILL quest roll.")
 async def skill(interaction: discord.Interaction):
+    await interaction.response.defer()
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.SKILL
     )
@@ -1673,6 +1674,7 @@ async def skill(interaction: discord.Interaction):
 
 @bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def checkin(interaction: discord.Interaction):
+    await interaction.response.defer()
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.TRAVEL
     )
@@ -1726,6 +1728,7 @@ async def checkin(interaction: discord.Interaction):
 
 @bot.tree.command(name="fetch",description="Collect the required item for a FETCH quest.")
 async def fetch(interaction: discord.Interaction):
+    await interaction.response.defer()
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
@@ -1768,6 +1771,7 @@ async def fetch(interaction: discord.Interaction):
 
 @bot.tree.command(name="turnin", description="Turn in the collected item for your FETCH quest.")
 async def turnin(interaction: discord.Interaction):
+    await interaction.response.defer()
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
