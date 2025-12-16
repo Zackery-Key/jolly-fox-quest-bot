@@ -664,57 +664,63 @@ async def announce_badges(
     if not badge_ids:
         return
 
-    # 🔹 Get Trinity from NPC storage
-    trinity = quest_manager.get_npc("trinity")
-    if not trinity:
+    badge_lines = [
+        f"{BADGES[b]['emoji']} **{BADGES[b]['name']}**"
+        for b in badge_ids
+        if b in BADGES
+    ]
+
+    if not badge_lines:
         return
 
-    lines = []
-    for bid in badge_ids:
-        badge = BADGES.get(bid)
-        if badge:
-            lines.append(f"{badge['emoji']} **{badge['name']}**")
+    # =========================
+    # 🧙 LOCAL — Trinity flavor
+    # =========================
+    if source_channel:
+        trinity = quest_manager.get_npc("trinity")
+        if trinity:
+            local_embed = discord.Embed(
+                description=(
+                    f"🎉 Congratulations **{member.mention}**!\n\n"
+                    f"You have earned a new guild badge:\n"
+                    + "\n".join(badge_lines)
+                ),
+                color=discord.Color.gold(),
+            )
 
-    if not lines:
+            local_embed.set_author(
+                name=trinity.name,
+                icon_url=trinity.avatar_url or discord.Embed.Empty,
+            )
+
+            try:
+                await source_channel.send(embed=local_embed)
+            except Exception as e:
+                print("[Badge Announce] Local Trinity send failed:", repr(e))
+
+    # ==================================
+    # 📢 GLOBAL — Clean system announce
+    # ==================================
+    global_channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+    if not global_channel:
+        print("[Badge Announce] Guild-Office not found")
         return
 
-    embed = discord.Embed(
+    global_embed = discord.Embed(
+        title="🏅 Badge Unlocked",
         description=(
-            f"🎉 Congratulations **{member.mention}**! "
-            f"You have earned a new badge from the guild!\n\n"
-            + "\n".join(lines)
+            f"🎉 **{member.mention}** has earned a new guild badge!\n\n"
+            + "\n".join(badge_lines)
         ),
         color=discord.Color.gold(),
     )
 
-    embed.set_author(
-        name=trinity.name,
-        icon_url=trinity.avatar_url or discord.Embed.Empty,
-    )
-
-    # 🔹 Local channel (quest channel)
-    if source_channel:
-        try:
-            await source_channel.send(embed=embed)
-        except Exception as e:
-            print("[Badge Announce] Local send failed:", repr(e))
-
-    # 🔹 Guild-Office (GLOBAL) — FIXED
-    global_channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
-
-    if not global_channel:
-        print("[Badge Announce] Guild-Office channel not found in guild")
-        return
+    global_embed.set_footer(text="Jolly Fox Guild")
 
     try:
-        await global_channel.send(embed=embed)
-        print("[Badge Announce] Sent to Guild-Office")
+        await global_channel.send(embed=global_embed)
     except Exception as e:
-        print("[Badge Announce] Global send failed:", repr(e))
-
-
-
-
+        print("[Badge Announce] Global badge send failed:", repr(e))
 
 
 
@@ -1731,9 +1737,10 @@ async def checkin(interaction: discord.Interaction):
     footer=f"✨ **Quest complete!** You earned **{QUEST_POINTS}** guild points.",
     )
 
-@bot.tree.command(name="fetch",description="Collect the required item for a FETCH quest.")
+@bot.tree.command(name="fetch", description="Collect the required item for a FETCH quest.")
 async def fetch(interaction: discord.Interaction):
     await interaction.response.defer()
+
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
@@ -1748,21 +1755,29 @@ async def fetch(interaction: discord.Interaction):
         )
         return
 
-    quest_id = player.daily_quest.get("quest_id")
+    # ✅ DEFINE EARLY (FIX)
+    turnin_channel = template.turnin_channel_id or 0
 
+    # 🔒 Already have item
     if player.has_item_for_quest(template.item_name):
+        turnin_hint = (
+            f"<#{turnin_channel}> and use `/turnin`"
+            if turnin_channel
+            else "`/turnin` in the guild office channel"
+        )
+
         await interaction.followup.send(
-            "📦 You've already gathered this quest item. "
-            f"Head to the <#{turnin_channel}> and use `/turnin`.",
+            "📦 You've already gathered this quest item.\n"
+            f"Head to {turnin_hint}.",
             ephemeral=True,
         )
         return
 
+    # 📦 Collect item
     item_name = template.item_name or "Quest Item"
     player.add_item(item_name)
     quest_manager.save_players()
 
-    turnin_channel = template.turnin_channel_id or 0
     turnin_hint = (
         f"<#{turnin_channel}> with `/turnin`"
         if turnin_channel
