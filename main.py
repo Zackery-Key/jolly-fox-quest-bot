@@ -656,7 +656,7 @@ badge_autocomplete = dict_autocomplete(
 )
 
 async def announce_badges(
-    bot,
+    guild: discord.Guild,
     member: discord.Member,
     badge_ids: list[str],
     source_channel: discord.abc.Messageable | None = None,
@@ -667,7 +667,7 @@ async def announce_badges(
     # 🔹 Get Trinity from NPC storage
     trinity = quest_manager.get_npc("trinity")
     if not trinity:
-        return  # fail silently if NPC missing
+        return
 
     lines = []
     for bid in badge_ids:
@@ -678,61 +678,40 @@ async def announce_badges(
     if not lines:
         return
 
-    message = (
-        f"🎉Congratulations **{member.mention}**!!! You have earned a new badge from the guild! Use /profile to view it.\n"
-        + "\n".join(lines)
-    )
-
     embed = discord.Embed(
-        description=message,
+        description=(
+            f"🎉 Congratulations **{member.mention}**! "
+            f"You have earned a new badge from the guild!\n\n"
+            + "\n".join(lines)
+        ),
         color=discord.Color.gold(),
     )
 
-    # 🧙 NPC identity (NOT dialogue)
     embed.set_author(
         name=trinity.name,
-        icon_url=trinity.avatar_url if trinity.avatar_url else discord.Embed.Empty,
+        icon_url=trinity.avatar_url or discord.Embed.Empty,
     )
 
-    # 🔹 Local channel (where quest was completed)
+    # 🔹 Local channel (quest channel)
     if source_channel:
         try:
             await source_channel.send(embed=embed)
-        except Exception:
-            pass
+        except Exception as e:
+            print("[Badge Announce] Local send failed:", repr(e))
+
+    # 🔹 Guild-Office (GLOBAL) — FIXED
+    global_channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+
+    if not global_channel:
+        print("[Badge Announce] Guild-Office channel not found in guild")
+        return
 
     try:
-        global_channel = bot.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
-        print("[Badge Debug] get_channel:", global_channel)
-
-        if global_channel is None:
-            global_channel = await bot.fetch_channel(BADGE_ANNOUNCE_CHANNEL_ID)
-            print("[Badge Debug] fetch_channel:", global_channel)
-
-        if not global_channel:
-            print("[Badge Debug] Global badge channel not found")
-            return
-
-        print(
-            "[Badge Debug] Channel guild:",
-            global_channel.guild.id,
-            "Interaction guild:",
-            member.guild.id,
-        )
-
-        perms = global_channel.permissions_for(global_channel.guild.me)
-        print(
-            "[Badge Debug] Permissions:",
-            perms.send_messages,
-            perms.embed_links,
-            perms.view_channel,
-        )
-
         await global_channel.send(embed=embed)
-        print("[Badge Debug] Sent to Guild-Office")
-
+        print("[Badge Announce] Sent to Guild-Office")
     except Exception as e:
-        print("[Badge Debug] Global send failed:", repr(e))
+        print("[Badge Announce] Global send failed:", repr(e))
+
 
 
 
