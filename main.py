@@ -609,7 +609,7 @@ async def send_npc_response(
     if footer:
         embed.add_field(name="\u200b", value=footer, inline=False)
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 async def log_admin_action(bot, message: str):
     channel = bot.get_channel(POINTS_LOG_CHANNEL_ID)
@@ -1891,7 +1891,7 @@ async def on_ready():
 
     # 🔹 AUTO refresh quest board
     try:
-        await quest_manager.refresh_quest_board(bot)
+        await refresh_quest_board(bot)
         print("Quest board refreshed on startup.")
     except Exception as e:
         print(f"Quest board refresh failed: {e}")
