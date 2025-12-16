@@ -172,21 +172,17 @@ class QuestManager:
 
         # Stats
         player.lifetime_completed += 1
-
-        # ✅ CAPTURE newly earned badges
-        new_badges = evaluate_automatic_badges(player)
-
         player.season_completed += 1
 
+        # 🎖️ AUTOMATIC BADGES (ONLY PLACE THEY ARE AWARDED)
+        new_badges = evaluate_automatic_badges(player)
+
         # XP
-        xp_gain = 50
-        player.add_xp(xp_gain)
+        player.add_xp(50)
 
         storage.save_players(self.players)
 
-        # ✅ RETURN THEM
         return True, new_badges
-
 
     def save_board(self):
         storage.save_board(self.quest_board)

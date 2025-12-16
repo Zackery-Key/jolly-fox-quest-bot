@@ -53,24 +53,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ========= Shared Helpers =========
 
-@bot.tree.command(name="admin_clear_global_commands", description="OWNER ONLY: Clear global slash commands")
-async def admin_clear_global_commands(interaction: discord.Interaction):
-    if interaction.user.id != 449334054878314497:
-        await interaction.response.send_message("❌ Owner only.", ephemeral=True)
-        return
-
-    await interaction.response.defer(ephemeral=True)
-
-    # 🔴 Clear GLOBAL commands
-    bot.tree.clear_commands(guild=None)
-    await bot.tree.sync(guild=None)
-
-    await interaction.followup.send(
-        "✅ Global slash commands wiped. Restart Discord and wait a few minutes.",
-        ephemeral=True,
-    )
-
-
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
     if max_value <= 0:
@@ -635,19 +617,6 @@ async def log_admin_action(bot, message: str):
     if channel:
         await channel.send(message)
 
-def grant_badge(player, badge_id: str) -> bool:
-    if badge_id in player.badges:
-        return False
-
-    player.badges.add(badge_id)
-
-    # Set title ONLY if definition exists
-    badge = BADGES.get(badge_id)
-    if badge and not player.title:
-        player.title = badge["name"]
-
-    return True
-
 def dict_autocomplete(source_dict, label_fn=None):
     async def _autocomplete(interaction, current: str):
         results = []
@@ -734,11 +703,24 @@ async def announce_badges(
 
     # 🔹 Global badge channel
     try:
-        global_channel = await bot.fetch_channel(BADGE_ANNOUNCE_CHANNEL_ID)
-        if global_channel:
-            await global_channel.send(embed=embed)
+        global_channel = bot.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+        if global_channel is None:
+            global_channel = await bot.fetch_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+
+        if not global_channel:
+            print("[Badge Announce] Badge channel not found")
+            return
+
+        perms = global_channel.permissions_for(global_channel.guild.me)
+        if not perms.send_messages:
+            print("[Badge Announce] Missing SEND_MESSAGES permission in badge channel")
+            return
+
+        await global_channel.send(embed=embed)
+
     except Exception as e:
         print(f"[Badge Announce] Failed to post in global channel: {e}")
+
 
 
 
@@ -1567,7 +1549,8 @@ async def talk(interaction: discord.Interaction):
     # -------------------------------------------------------------
     completed, new_badges = quest_manager.complete_daily(interaction.user.id)
 
-    if new_badges:
+    if completed and new_badges:
+        # 🎖️ Personal feedback (ephemeral)
         await interaction.followup.send(
             "🎖️ **New badge unlocked!**\n"
             + "\n".join(
@@ -1578,14 +1561,17 @@ async def talk(interaction: discord.Interaction):
             ephemeral=True,
         )
 
-    member = interaction.guild.get_member(interaction.user.id)
-    if member:
-        await announce_badges(
-            interaction.client,
-            member,
-            new_badges,
-            source_channel=interaction.channel,
-    )
+        # 📣 Public announcement
+        member = interaction.guild.get_member(interaction.user.id)
+        if member:
+            await announce_badges(
+                interaction.client,
+                member,
+                new_badges,
+                source_channel=interaction.channel,
+            )
+
+
 
 
     faction_id = get_member_faction_id(interaction.user)
@@ -1642,7 +1628,8 @@ async def skill(interaction: discord.Interaction):
     # ✅ Complete quest
     completed, new_badges = quest_manager.complete_daily(interaction.user.id)
 
-    if new_badges:
+    if completed and new_badges:
+        # 🎖️ Personal feedback (ephemeral)
         await interaction.followup.send(
             "🎖️ **New badge unlocked!**\n"
             + "\n".join(
@@ -1653,14 +1640,16 @@ async def skill(interaction: discord.Interaction):
             ephemeral=True,
         )
 
-    member = interaction.guild.get_member(interaction.user.id)
-    if member:
-        await announce_badges(
-            interaction.client,
-            member,
-            new_badges,
-            source_channel=interaction.channel,
-    )
+        # 📣 Public announcement
+        member = interaction.guild.get_member(interaction.user.id)
+        if member:
+            await announce_badges(
+                interaction.client,
+                member,
+                new_badges,
+                source_channel=interaction.channel,
+            )
+
 
 
     if gained > 0:
@@ -1712,7 +1701,8 @@ async def checkin(interaction: discord.Interaction):
 
     completed, new_badges = quest_manager.complete_daily(interaction.user.id)
 
-    if new_badges:
+    if completed and new_badges:
+        # 🎖️ Personal feedback (ephemeral)
         await interaction.followup.send(
             "🎖️ **New badge unlocked!**\n"
             + "\n".join(
@@ -1723,14 +1713,18 @@ async def checkin(interaction: discord.Interaction):
             ephemeral=True,
         )
 
-    member = interaction.guild.get_member(interaction.user.id)
-    if member:
-        await announce_badges(
-            interaction.client,
-            member,
-            new_badges,
-            source_channel=interaction.channel,
-    )
+        # 📣 Public announcement
+        member = interaction.guild.get_member(interaction.user.id)
+        if member:
+            await announce_badges(
+                interaction.client,
+                member,
+                new_badges,
+                source_channel=interaction.channel,
+            )
+
+
+
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
@@ -1839,7 +1833,8 @@ async def turnin(interaction: discord.Interaction):
     # ✅ Complete quest + award points
     completed, new_badges = quest_manager.complete_daily(interaction.user.id)
 
-    if new_badges:
+    if completed and new_badges:
+        # 🎖️ Personal feedback (ephemeral)
         await interaction.followup.send(
             "🎖️ **New badge unlocked!**\n"
             + "\n".join(
@@ -1850,14 +1845,16 @@ async def turnin(interaction: discord.Interaction):
             ephemeral=True,
         )
 
-    member = interaction.guild.get_member(interaction.user.id)
-    if member:
-        await announce_badges(
-            interaction.client,
-            member,
-            new_badges,
-            source_channel=interaction.channel,
-    )
+        # 📣 Public announcement
+        member = interaction.guild.get_member(interaction.user.id)
+        if member:
+            await announce_badges(
+                interaction.client,
+                member,
+                new_badges,
+                source_channel=interaction.channel,
+            )
+
 
 
     faction_id = get_member_faction_id(interaction.user)
@@ -1875,16 +1872,16 @@ async def turnin(interaction: discord.Interaction):
 
 # ========= Events =========
 
-# CLEAR COMMANDS ONE TIME. UNCOMMENT, DEPLOY, RECOMMENT, REDEPLOY
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
+# # CLEAR COMMANDS ONE TIME. UNCOMMENT, DEPLOY, RECOMMENT, REDEPLOY
+# @bot.event
+# async def on_ready():
+#     print(f"Logged in as {bot.user}")
 
-    # 🔴 WIPE GLOBAL COMMANDS
-    bot.tree.clear_commands()
-    await bot.tree.sync()
+#     # 🔴 WIPE GLOBAL COMMANDS
+#     bot.tree.clear_commands()
+#     await bot.tree.sync()
 
-    print("⚠ Global commands wiped and resynced")
+#     print("⚠ Global commands wiped and resynced")
 
 
 @bot.event
@@ -1895,22 +1892,22 @@ async def setup_hook():
     bot.tree.copy_global_to(guild=guild)
 
 
-# @bot.event
-# async def on_ready():
-#     guild = discord.Object(id=GUILD_ID)
-#     cmds = await bot.tree.sync(guild=guild)
-#     print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
-#     print(f"Logged in as {bot.user}")
+@bot.event
+async def on_ready():
+    guild = discord.Object(id=GUILD_ID)
+    cmds = await bot.tree.sync(guild=guild)
+    print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
+    print(f"Logged in as {bot.user}")
 
-#     # Sync commands (you already do this)
-#     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+    # Sync commands (you already do this)
+    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
 
-#     # 🔹 AUTO refresh quest board
-#     try:
-#         await refresh_quest_board(bot)
-#         print("Quest board refreshed on startup.")
-#     except Exception as e:
-#         print(f"Quest board refresh failed: {e}")
+    # 🔹 AUTO refresh quest board
+    try:
+        await refresh_quest_board(bot)
+        print("Quest board refreshed on startup.")
+    except Exception as e:
+        print(f"Quest board refresh failed: {e}")
 
 
 @bot.event
