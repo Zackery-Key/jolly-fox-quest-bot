@@ -1452,8 +1452,6 @@ async def quest(interaction: discord.Interaction):
 async def profile(interaction: discord.Interaction):
     player = quest_manager.get_or_create_player(interaction.user.id)
 
-    evaluate_automatic_badges(player)
-
     embed = build_profile_embed(
         viewer=interaction.user,
         target=interaction.user,
@@ -1468,8 +1466,6 @@ async def profile_user(
     member: discord.Member,
 ):
     player = quest_manager.get_or_create_player(member.id)
-
-    evaluate_automatic_badges(player)
 
     embed = build_profile_embed(
         viewer=interaction.user,
