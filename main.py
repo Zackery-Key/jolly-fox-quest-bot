@@ -573,16 +573,18 @@ class QuestBoardView(discord.ui.View):
         style=discord.ButtonStyle.secondary,
         custom_id="quest_board:view_profile"
     )
-    async def view_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
-        player = quest_manager.get_or_create_player(interaction.user.id)
+    async def view_profile(self, interaction: discord.Interaction, button):
+        await interaction.response.defer(ephemeral=True)
 
+        player = quest_manager.get_or_create_player(interaction.user.id)
         embed = build_profile_embed(
             viewer=interaction.user,
             target=interaction.user,
             player=player,
         )
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed)
+
 
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild
@@ -1453,18 +1455,19 @@ async def quest(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     await send_daily_quest(interaction)
 
-@bot.tree.command(name="profile", description="View your Jolly Fox Guild profile.")
+@bot.tree.command(name="profile")
 async def profile(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    player = quest_manager.get_or_create_player(interaction.user.id)
 
+    player = quest_manager.get_or_create_player(interaction.user.id)
     embed = build_profile_embed(
         viewer=interaction.user,
         target=interaction.user,
         player=player,
     )
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
+
 
 @bot.tree.command(name="profile_user",description="View another guild member’s profile.")
 async def profile_user(
@@ -1472,15 +1475,15 @@ async def profile_user(
     member: discord.Member,
 ):
     await interaction.response.defer(ephemeral=True)
-    player = quest_manager.get_or_create_player(member.id)
 
+    player = quest_manager.get_or_create_player(interaction.user.id)
     embed = build_profile_embed(
         viewer=interaction.user,
-        target=member,
+        target=interaction.user,
         player=player,
     )
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="title_set", description="Set your active guild title.")
 @app_commands.autocomplete(title=title_autocomplete)
