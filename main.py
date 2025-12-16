@@ -21,7 +21,6 @@ from systems.seasonal.state import get_season_state
 from systems.quests.factions import get_member_faction_id
 from systems.seasonal.storage import load_season, save_season
 from systems.badges.definitions import BADGES
-from systems.quests.quest_manager import evaluate_automatic_badges
 from discord import app_commands
 
 
@@ -439,6 +438,7 @@ def validate_npc_data(npcs: dict) -> tuple[bool, str]:
     return True, "OK"
 
 async def send_daily_quest(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     user = interaction.user
     user_id = user.id
     today = str(date.today())
@@ -454,7 +454,7 @@ async def send_daily_quest(interaction: discord.Interaction):
     ):
         tmpl = quest_manager.get_template(player.daily_quest.get("quest_id"))
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             (
                 "✅ **You've already completed today's quest!**\n\n"
                 f"**Quest:** {tmpl.name if tmpl else 'Unknown'}\n\n"
@@ -477,7 +477,7 @@ async def send_daily_quest(interaction: discord.Interaction):
         quest_id = quest_manager.assign_daily(user_id, role_ids)
 
         if quest_id is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "🦊 There are no quests available for your current roles right now.\n\n"
                 "If you join a new guild faction or RP group later today, "
                 "you can try again.",
@@ -487,7 +487,7 @@ async def send_daily_quest(interaction: discord.Interaction):
 
     template = quest_manager.get_template(quest_id)
     if template is None:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "⚠️ Error loading your quest. Please contact an admin.",
             ephemeral=True,
         )
@@ -554,7 +554,7 @@ async def send_daily_quest(interaction: discord.Interaction):
         + footer
     )
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.followup.send(msg, ephemeral=True)
 
 class QuestBoardView(discord.ui.View):
     def __init__(self):
@@ -565,7 +565,8 @@ class QuestBoardView(discord.ui.View):
         style=discord.ButtonStyle.primary,
         custom_id="quest_board:view_daily"
     )
-    async def view_daily(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def view_daily(self, interaction, button):
+        await interaction.response.defer(ephemeral=True)
         await send_daily_quest(interaction)
 
     @discord.ui.button(
@@ -1450,10 +1451,12 @@ async def quest_admin_adjust_points(
 
 @bot.tree.command(name="quest",description="See your daily Jolly Fox guild quest.")
 async def quest(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     await send_daily_quest(interaction)
 
 @bot.tree.command(name="profile", description="View your Jolly Fox Guild profile.")
 async def profile(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     player = quest_manager.get_or_create_player(interaction.user.id)
 
     embed = build_profile_embed(
@@ -1469,6 +1472,7 @@ async def profile_user(
     interaction: discord.Interaction,
     member: discord.Member,
 ):
+    await interaction.response.defer(ephemeral=True)
     player = quest_manager.get_or_create_player(member.id)
 
     embed = build_profile_embed(
