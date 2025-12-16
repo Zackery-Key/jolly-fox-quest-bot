@@ -1857,6 +1857,20 @@ async def turnin(interaction: discord.Interaction):
 
 # ========= Events =========
 
+# # CLEAR COMMANDS ONE TIME. UNCOMMENT, DEPLOY, RECOMMENT, REDEPLOY
+# @bot.event
+# async def on_ready():
+#     print(f"Logged in as {bot.user}")
+
+#     guild = discord.Object(id=GUILD_ID)
+
+#     # 🔴 ONE-TIME CLEANUP
+#     bot.tree.clear_commands(guild=guild)
+#     await bot.tree.sync(guild=guild)
+
+#     print("Cleared and resynced guild commands.")
+
+
 @bot.event
 async def setup_hook():
     guild = discord.Object(id=GUILD_ID)
@@ -1865,37 +1879,22 @@ async def setup_hook():
     bot.tree.copy_global_to(guild=guild)
 
 
-# CLEAR COMMANDS ONE TIME. UNCOMMENT, DEPLOY, RECOMMENT, REDEPLOY
 @bot.event
 async def on_ready():
+    guild = discord.Object(id=GUILD_ID)
+    cmds = await bot.tree.sync(guild=guild)
+    print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
     print(f"Logged in as {bot.user}")
 
-    guild = discord.Object(id=GUILD_ID)
+    # Sync commands (you already do this)
+    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
 
-    # 🔴 ONE-TIME CLEANUP
-    bot.tree.clear_commands(guild=guild)
-    await bot.tree.sync(guild=guild)
-
-    print("Cleared and resynced guild commands.")
-
-
-
-# @bot.event
-# async def on_ready():
-#     guild = discord.Object(id=GUILD_ID)
-#     cmds = await bot.tree.sync(guild=guild)
-#     print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
-#     print(f"Logged in as {bot.user}")
-
-#     # Sync commands (you already do this)
-#     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-#     # 🔹 AUTO refresh quest board
-#     try:
-#         await quest_manager.refresh_quest_board(bot)
-#         print("Quest board refreshed on startup.")
-#     except Exception as e:
-#         print(f"Quest board refresh failed: {e}")
+    # 🔹 AUTO refresh quest board
+    try:
+        await quest_manager.refresh_quest_board(bot)
+        print("Quest board refreshed on startup.")
+    except Exception as e:
+        print(f"Quest board refresh failed: {e}")
 
 
 @bot.event
