@@ -1251,13 +1251,15 @@ async def quest_board_cmd(interaction: discord.Interaction):
             return  # 🛑 STOP HERE — DO NOT POST A NEW BOARD
 
         except Exception as e:
-            print("Quest board update failed, reposting:", e)
+            print("Quest board update failed:", e)
 
-    # No existing board OR update failed → post new board
     await interaction.response.send_message(
-        embed=embed,
-        view=QuestBoardView()
+        "⚠️ Failed to update the existing quest board.\n"
+        "Use `/quest_admin_reset_board` or repost the board manually if needed.",
+        ephemeral=True,
     )
+    return
+
 
     msg = await interaction.original_response()
     board.display_channel_id = msg.channel.id
