@@ -1659,7 +1659,7 @@ async def skill(interaction: discord.Interaction):
 
     if gained > 0:
         faction_id = get_member_faction_id(interaction.user)
-        quest_manager.award_points(interaction.user.id, gained, faction_id)
+        quest_manager.award_points(interaction.user_id, faction_id)
         await refresh_quest_board(interaction.client)
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
