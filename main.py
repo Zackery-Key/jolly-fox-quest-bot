@@ -657,52 +657,42 @@ badge_autocomplete = dict_autocomplete(
     lambda k, v: f"{k} — {v['name']}"
 )
 
-async def announce_badges(
-    guild: discord.Guild,
-    member: discord.Member,
-    badge_ids: list[str],
-):
-    if not badge_ids:
-        return
-
-    badge_lines = [
-        f"{BADGES[b]['emoji']} **{BADGES[b]['name']}**"
-        for b in badge_ids
-        if b in BADGES
-    ]
-
-    if not badge_lines:
-        return
-
+async def handle_progression_announcements(guild, member, result):
     channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
     if not channel:
-        print("[Badge Announce] Badge announce channel not found")
         return
 
-    # 🧙 Trinity NPC
     trinity = quest_manager.get_npc("trinity")
+    if not trinity:
+        return
 
-    embed = discord.Embed(
-        description=(
-            f"🎉 Congratulations **{member.mention}**!\n\n"
-            f"You have earned a new guild badge:\n"
-            + "\n".join(badge_lines)
-        ),
-        color=discord.Color.gold(),
-    )
-
-    if trinity:
-        embed.set_author(
-            name=trinity.name,
-            icon_url=trinity.avatar_url or discord.Embed.Empty,
+    # 🏅 Badge announcement
+    if result.get("new_badges"):
+        embed = discord.Embed(
+            description=(
+                f"🏅 **{member.display_name}** has earned a new guild badge!\n\n"
+                + "\n".join(
+                    f"{BADGES[b]['emoji']} **{BADGES[b]['name']}**"
+                    for b in result["new_badges"]
+                    if b in BADGES
+                )
+            ),
+            color=discord.Color.gold(),
         )
-
-    embed.set_footer(text="Jolly Fox Guild")
-
-    try:
+        embed.set_author(name=trinity.name, icon_url=trinity.avatar_url)
         await channel.send(embed=embed)
-    except Exception as e:
-        print("[Badge Announce] Failed to send:", repr(e))
+
+    # 🌟 Level-up announcement
+    if result.get("level_up"):
+        embed = discord.Embed(
+            description=(
+                f"🌟 **{member.display_name}** has reached "
+                f"**Level {result['level_up']}**!"
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.set_author(name=trinity.name, icon_url=trinity.avatar_url)
+        await channel.send(embed=embed)
 
 
 
@@ -1498,7 +1488,7 @@ async def title_set(
 
 @bot.tree.command(name="talk",description="Speak with the required NPC to complete your quest.")
 async def talk(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     # Validate daily quest + ensure type = SOCIAL
     player, template = await _ensure_active_daily(
@@ -1527,36 +1517,14 @@ async def talk(interaction: discord.Interaction):
     # -------------------------------------------------------------
     reply_text = get_npc_quest_dialogue(npc, template)
 
+    result = quest_manager.complete_daily(interaction.user.id)
 
-    # -------------------------------------------------------------
-    # Complete quest + award points
-    # -------------------------------------------------------------
-    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
-
-    if completed and new_badges:
-        # 🎖️ Personal feedback (ephemeral)
-        await interaction.followup.send(
-            "🎖️ **New badge unlocked!**\n"
-            + "\n".join(
-                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
-                for b in new_badges
-                if b in BADGES
-            ),
-            ephemeral=True,
-        )
-
-        # 📣 Public announcement
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await announce_badges(
+    if result.get("completed"):
+        await handle_progression_announcements(
             interaction.guild,
-            member,
-            new_badges,
-        )
-
-
-
-
+            interaction.user,
+            result,
+    )
 
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
@@ -1575,7 +1543,7 @@ async def talk(interaction: discord.Interaction):
 
 @bot.tree.command(name="skill", description="Attempt a SKILL quest roll.")
 async def skill(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.SKILL
     )
@@ -1593,8 +1561,6 @@ async def skill(interaction: discord.Interaction):
     dc = template.dc or 10
     roll = random.randint(1, 20)
     success = roll >= dc
-
-    gained = QUEST_POINTS if success else QUEST_POINTS or 0
     result_text = (
         f"🎯 You rolled **{roll}** (DC {dc}) — **Success!**"
         if success else
@@ -1608,35 +1574,15 @@ async def skill(interaction: discord.Interaction):
         if npc
         else None
     )
+    result = quest_manager.complete_daily(interaction.user.id)
 
-    # ✅ Complete quest
-    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
-
-    if completed and new_badges:
-        # 🎖️ Personal feedback (ephemeral)
-        await interaction.followup.send(
-            "🎖️ **New badge unlocked!**\n"
-            + "\n".join(
-                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
-                for b in new_badges
-                if b in BADGES
-            ),
-            ephemeral=True,
-        )
-
-        # 📣 Public announcement
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await announce_badges(
+    if result.get("completed"):
+        await handle_progression_announcements(
             interaction.guild,
-            member,
-            new_badges,
-        )
+            interaction.user,
+            result,
+    )
 
-
-
-
-    if gained > 0:
         faction_id = get_member_faction_id(interaction.user)
         quest_manager.award_points(interaction.user_id, faction_id)
         await refresh_quest_board(interaction.client)
@@ -1649,24 +1595,22 @@ async def skill(interaction: discord.Interaction):
             dialogue=dialogue or "The training concludes.",
             title="Training Complete",
             footer=(
-                f"{result_text}\n\n✨ You earned **{gained}** guild points."
-                if gained > 0
-                else result_text
-            ),
+                f"{result_text}\n\n✨ You earned **{QUEST_POINTS}** guild points."
+            )
         )
     else:
         await interaction.followup.send(
             (
                 f"🎯 **Training Complete**\n\n"
                 f"{result_text}\n\n"
-                f"✨ You earned **{gained}** guild points."
+                f"✨ You earned **{QUEST_POINTS}** guild points."
             ),
             ephemeral=True
         )
 
 @bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def checkin(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.TRAVEL
     )
@@ -1683,34 +1627,15 @@ async def checkin(interaction: discord.Interaction):
 
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
     dialogue = get_npc_quest_dialogue(npc, template) if npc else None
+    result = quest_manager.complete_daily(interaction.user.id)
 
-    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
-
-    if completed and new_badges:
-        # 🎖️ Personal feedback (ephemeral)
-        await interaction.followup.send(
-            "🎖️ **New badge unlocked!**\n"
-            + "\n".join(
-                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
-                for b in new_badges
-                if b in BADGES
-            ),
-            ephemeral=True,
-        )
-
-        # 📣 Public announcement
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await announce_badges(
+    if result.get("completed"):
+        await handle_progression_announcements(
             interaction.guild,
-            member,
-            new_badges,
-        )
-
-
-
-
-
+            interaction.user,
+            result,
+    )
+        
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
     await refresh_quest_board(interaction.client)
@@ -1725,7 +1650,7 @@ async def checkin(interaction: discord.Interaction):
 
 @bot.tree.command(name="fetch", description="Collect the required item for a FETCH quest.")
 async def fetch(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
@@ -1778,7 +1703,7 @@ async def fetch(interaction: discord.Interaction):
 
 @bot.tree.command(name="turnin", description="Turn in the collected item for your FETCH quest.")
 async def turnin(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     player, template = await _ensure_active_daily(
         interaction, expected_type=QuestType.FETCH
     )
@@ -1824,34 +1749,14 @@ async def turnin(interaction: discord.Interaction):
     # 📦 Consume item
     player.consume_item(template.item_name)
     quest_manager.save_players()
+    result = quest_manager.complete_daily(interaction.user.id)
 
-    # ✅ Complete quest + award points
-    completed, new_badges = quest_manager.complete_daily(interaction.user.id)
-
-    if completed and new_badges:
-        # 🎖️ Personal feedback (ephemeral)
-        await interaction.followup.send(
-            "🎖️ **New badge unlocked!**\n"
-            + "\n".join(
-                f"{BADGES[b]['emoji']} {BADGES[b]['name']}"
-                for b in new_badges
-                if b in BADGES
-            ),
-            ephemeral=True,
-        )
-
-        # 📣 Public announcement
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await announce_badges(
+    if result.get("completed"):
+        await handle_progression_announcements(
             interaction.guild,
-            member,
-            new_badges,
-        )
-
-
-
-
+            interaction.user,
+            result,
+    )
     faction_id = get_member_faction_id(interaction.user)
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
     await refresh_quest_board(interaction.client)

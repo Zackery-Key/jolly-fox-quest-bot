@@ -50,16 +50,15 @@ class PlayerState:
         needed = self.next_level_xp
         return min(self.xp / needed, 1.0) if needed > 0 else 0.0
 
-    def add_xp(self, amount: int) -> bool:
-        leveled = False
+    def add_xp(self, amount: int):
+        old_level = self.level
         self.xp += amount
 
         while self.xp >= self.next_level_xp:
             self.xp -= self.next_level_xp
             self.level += 1
-            leveled = True
 
-        return leveled
+        self.last_level_up = self.level if self.level > old_level else None
 
 
     # -----------------------------------------------------

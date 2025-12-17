@@ -166,7 +166,7 @@ class QuestManager:
         player = self.get_or_create_player(user_id)
 
         if player.daily_quest.get("completed"):
-            return False, []
+            return {"completed": False}
 
         player.daily_quest["completed"] = True
 
@@ -174,7 +174,7 @@ class QuestManager:
         player.lifetime_completed += 1
         player.season_completed += 1
 
-        # 🎖️ AUTOMATIC BADGES (ONLY PLACE THEY ARE AWARDED)
+        # 🎖️ Badges
         new_badges = evaluate_automatic_badges(player)
 
         # XP
@@ -182,7 +182,12 @@ class QuestManager:
 
         storage.save_players(self.players)
 
-        return True, new_badges
+        return {
+            "completed": True,
+            "new_badges": new_badges,
+            "level_up": player.last_level_up,
+        }
+
 
     def save_board(self):
         storage.save_board(self.quest_board)
