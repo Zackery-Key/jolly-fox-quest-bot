@@ -27,8 +27,8 @@ from discord import app_commands
 
 # ========= Constants / IDs =========
 
-POINTS_LOG_CHANNEL_ID = 1450165120159191172
-BADGE_ANNOUNCE_CHANNEL_ID = 1448903133899259914
+POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
+BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
