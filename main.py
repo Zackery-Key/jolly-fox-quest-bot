@@ -1426,7 +1426,7 @@ async def quest(interaction: discord.Interaction):
 
 @bot.tree.command(name="profile")
 async def profile(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
 
     player = quest_manager.get_or_create_player(interaction.user.id)
     embed = build_profile_embed(
@@ -1437,18 +1437,14 @@ async def profile(interaction: discord.Interaction):
 
     await interaction.followup.send(embed=embed)
 
-
 @bot.tree.command(name="profile_user",description="View another guild member’s profile.")
-async def profile_user(
-    interaction: discord.Interaction,
-    member: discord.Member,
-):
-    await interaction.response.defer(ephemeral=True)
+async def profile_user(interaction: discord.Interaction,member: discord.Member,):
+    await interaction.response.defer(ephemeral=False)
 
-    player = quest_manager.get_or_create_player(interaction.user.id)
+    player = quest_manager.get_or_create_player(member.id)
     embed = build_profile_embed(
         viewer=interaction.user,
-        target=interaction.user,
+        target=member,
         player=player,
     )
 
