@@ -583,8 +583,7 @@ class QuestBoardView(discord.ui.View):
             player=player,
         )
 
-        await interaction.followup.send(embed=embed)
-
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild
@@ -612,7 +611,8 @@ async def send_npc_response(
     if footer:
         embed.add_field(name="\u200b", value=footer, inline=False)
 
-    await interaction.followup.send(embed=embed)
+    await interaction.followup.send(embed=embed, ephemeral=True
+)
 
 async def log_admin_action(bot, message: str):
     channel = bot.get_channel(POINTS_LOG_CHANNEL_ID)
@@ -675,38 +675,18 @@ async def announce_badges(
     if not badge_lines:
         return
 
-    # =========================
-    # 🧙 LOCAL — Trinity flavor
-    # =========================
-    if source_channel:
-        trinity = quest_manager.get_npc("trinity")
-        if trinity:
-            local_embed = discord.Embed(
-                description=(
-                    f"🎉 Congratulations **{member.mention}**!\n\n"
-                    f"You have earned a new guild badge:\n"
-                    + "\n".join(badge_lines)
-                ),
-                color=discord.Color.gold(),
-            )
-
-            local_embed.set_author(
-                name=trinity.name,
-                icon_url=trinity.avatar_url or discord.Embed.Empty,
-            )
-
-            try:
-                await source_channel.send(embed=local_embed)
-            except Exception as e:
-                print("[Badge Announce] Local Trinity send failed:", repr(e))
-
     # ==================================
     # 📢 GLOBAL — Clean system announce
     # ==================================
     global_channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
     if not global_channel:
-        print("[Badge Announce] Guild-Office not found")
-        return
+        print("[Badge Announce] Badge announce channel not found")
+    else:
+        try:
+            await global_channel.send(embed=global_embed)
+        except Exception as e:
+            print("[Badge Announce] Global badge send failed:", repr(e))
+
 
     global_embed = discord.Embed(
         title="🏅 Badge Unlocked",
@@ -1682,7 +1662,7 @@ async def skill(interaction: discord.Interaction):
                 f"{result_text}\n\n"
                 f"✨ You earned **{gained}** guild points."
             ),
-            ephemeral=False
+            ephemeral=True
         )
 
 @bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
