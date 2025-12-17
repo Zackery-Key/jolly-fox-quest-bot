@@ -1,9 +1,14 @@
 import random
-from datetime import date
+import discord
 
+from datetime import date
 from . import storage
 from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
+from datetime import datetime, timezone
+
+BETA_CUTOFF = datetime(2026, 1, 1, tzinfo=timezone.utc)
+FOUNDER_CUTOFF = datetime(2026, 3, 1, tzinfo=timezone.utc)
 
 def evaluate_automatic_badges(player):
     newly_awarded = []
@@ -18,6 +23,28 @@ def evaluate_automatic_badges(player):
 
     return newly_awarded
 
+def evaluate_join_date_badges(member: discord.Member, player):
+    """
+    Grant join-date-based badges if eligible.
+    Returns list of newly awarded badge IDs.
+    """
+    newly_awarded = []
+
+    joined_at = member.joined_at
+    if not joined_at:
+        return newly_awarded
+
+    # 🧪 Beta Tester
+    if joined_at < BETA_CUTOFF and "beta_tester" not in player.badges:
+        player.badges.add("beta_tester")
+        newly_awarded.append("beta_tester")
+
+    # 🦊 Founding Member
+    if joined_at < FOUNDER_CUTOFF and "founding_member" not in player.badges:
+        player.badges.add("founding_member")
+        newly_awarded.append("founding_member")
+
+    return newly_awarded
 
 class QuestManager:
     def __init__(self):

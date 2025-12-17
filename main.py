@@ -7,6 +7,7 @@ from discord.ext import commands
 import io
 import json
 
+
 from systems.quests.npc_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
 from systems.quests.quest_models import QuestType, QuestTemplate
@@ -21,6 +22,7 @@ from systems.seasonal.state import get_season_state
 from systems.quests.factions import get_member_faction_id
 from systems.seasonal.storage import load_season, save_season
 from systems.badges.definitions import BADGES
+from systems.quests.quest_manager import evaluate_join_date_badges
 from discord import app_commands
 
 
@@ -806,6 +808,32 @@ async def season_boss_set(
 
 
 # ========= ADMIN: Badge =========
+
+@bot.tree.command(name="badge_backfill_join_dates",description="Admin: Grant beta/founder badges based on join date.")
+@app_commands.default_permissions(manage_guild=True)
+async def badge_backfill_join_dates(interaction: discord.Interaction):
+    if not require_admin(interaction):
+        return await interaction.response.send_message(
+            "❌ No permission.",
+            ephemeral=True,
+        )
+
+    guild = interaction.guild
+    granted = 0
+
+    for member in guild.members:
+        player = quest_manager.get_or_create_player(member.id)
+        new_badges = evaluate_join_date_badges(member, player)
+
+        if new_badges:
+            granted += len(new_badges)
+
+    quest_manager.save_players()
+
+    await interaction.response.send_message(
+        f"🦊 Backfill complete. Granted **{granted}** join-date badges.",
+        ephemeral=True,
+    )
 
 @bot.tree.command(name="badge_grant", description="Admin: Grant a badge to a user.")
 @app_commands.autocomplete(badge_id=badge_autocomplete)
@@ -1810,6 +1838,24 @@ async def on_ready():
         print("Quest board refreshed on startup.")
     except Exception as e:
         print(f"Quest board refresh failed: {e}")
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    player = quest_manager.get_or_create_player(member.id)
+
+    new_badges = evaluate_join_date_badges(member, player)
+    if new_badges:
+        quest_manager.save_players()
+
+        # Optional: public Trinity announcement
+        await handle_progression_announcements(
+            member.guild,
+            member,
+            {
+                "new_badges": new_badges,
+                "level_up": None,
+            }
+        )
 
 
 @bot.event

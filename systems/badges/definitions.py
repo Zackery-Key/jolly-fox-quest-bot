@@ -21,4 +21,9 @@ BADGES = {
         "emoji": "🍻",
         "description": "A consistent and trusted member of the guild."
     },
+    "beta_tester": {
+        "name": "Beta Tester",
+        "emoji": "🧪",
+        "description": "Joined the Jolly Fox Guild during beta."
+    },
 }
