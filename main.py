@@ -1197,39 +1197,45 @@ async def quest_admin_list_npcs(interaction: discord.Interaction):
 
 # ========= ADMIN: Board =========
 
-@bot.tree.command(name="quest_board", description="Show or update the Jolly Fox seasonal quest scoreboard.")
+@bot.tree.command(name="quest_board",description="Show or update the Jolly Fox seasonal quest scoreboard.")
 @app_commands.default_permissions(manage_guild=True)
 async def quest_board_cmd(interaction: discord.Interaction):
     board = quest_manager.quest_board
     embed = build_board_embed()
 
-    updated_existing = False
-
+    # Attempt to update existing board
     if board.display_channel_id and board.message_id:
-        channel = interaction.client.get_channel(board.display_channel_id)
         try:
+            channel = interaction.client.get_channel(board.display_channel_id)
             if channel is None:
                 channel = await interaction.client.fetch_channel(
                     board.display_channel_id
                 )
+
             msg = await channel.fetch_message(board.message_id)
             await msg.edit(embed=embed, view=QuestBoardView())
-            updated_existing = True
-        except Exception:
-            updated_existing = False
 
-    if not updated_existing:
-        await interaction.response.send_message(embed=embed,view=QuestBoardView())
+            # ✅ IMPORTANT: ephemeral confirmation ONLY
+            await interaction.response.send_message(
+                "🔄 Quest board updated.",
+                ephemeral=True,
+            )
+            return  # 🛑 STOP HERE — DO NOT POST A NEW BOARD
 
-        msg = await interaction.original_response()
-        board.display_channel_id = msg.channel.id
-        board.message_id = msg.id
-        quest_manager.save_board()
-    else:
-        await interaction.response.send_message(
-            "🔄 Updated the existing quest board message.",
-            ephemeral=True,
-        )
+        except Exception as e:
+            print("Quest board update failed, reposting:", e)
+
+    # No existing board OR update failed → post new board
+    await interaction.response.send_message(
+        embed=embed,
+        view=QuestBoardView()
+    )
+
+    msg = await interaction.original_response()
+    board.display_channel_id = msg.channel.id
+    board.message_id = msg.id
+    quest_manager.save_board()
+
 
 @bot.tree.command(name="quest_admin_set_season",description="Admin: Start a new season and set goal/reward text.")
 @app_commands.default_permissions(manage_guild=True)
