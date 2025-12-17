@@ -661,7 +661,6 @@ async def announce_badges(
     guild: discord.Guild,
     member: discord.Member,
     badge_ids: list[str],
-    source_channel: discord.abc.Messageable | None = None,
 ):
     if not badge_ids:
         return
@@ -675,35 +674,35 @@ async def announce_badges(
     if not badge_lines:
         return
 
-    # ==================================
-    # 📢 GLOBAL — Clean system announce
-    # ==================================
-    global_channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
-    if not global_channel:
+    channel = guild.get_channel(BADGE_ANNOUNCE_CHANNEL_ID)
+    if not channel:
         print("[Badge Announce] Badge announce channel not found")
-    else:
-        try:
-            await global_channel.send(embed=global_embed)
-        except Exception as e:
-            print("[Badge Announce] Global badge send failed:", repr(e))
+        return
 
+    # 🧙 Trinity NPC
+    trinity = quest_manager.get_npc("trinity")
 
-    global_embed = discord.Embed(
-        title="🏅 Badge Unlocked",
+    embed = discord.Embed(
         description=(
-            f"🎉 **{member.mention}** has earned a new guild badge!\n\n"
+            f"🎉 Congratulations **{member.mention}**!\n\n"
+            f"You have earned a new guild badge:\n"
             + "\n".join(badge_lines)
         ),
         color=discord.Color.gold(),
     )
 
-    global_embed.set_footer(text="Jolly Fox Guild")
+    if trinity:
+        embed.set_author(
+            name=trinity.name,
+            icon_url=trinity.avatar_url or discord.Embed.Empty,
+        )
+
+    embed.set_footer(text="Jolly Fox Guild")
 
     try:
-        await global_channel.send(embed=global_embed)
+        await channel.send(embed=embed)
     except Exception as e:
-        print("[Badge Announce] Global badge send failed:", repr(e))
-
+        print("[Badge Announce] Failed to send:", repr(e))
 
 
 
@@ -1550,11 +1549,11 @@ async def talk(interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
         if member:
             await announce_badges(
-                interaction.client,
-                member,
-                new_badges,
-                source_channel=interaction.channel,
-            )
+            interaction.guild,
+            member,
+            new_badges,
+        )
+
 
 
 
@@ -1629,11 +1628,11 @@ async def skill(interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
         if member:
             await announce_badges(
-                interaction.client,
-                member,
-                new_badges,
-                source_channel=interaction.channel,
-            )
+            interaction.guild,
+            member,
+            new_badges,
+        )
+
 
 
 
@@ -1703,11 +1702,11 @@ async def checkin(interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
         if member:
             await announce_badges(
-                interaction.client,
-                member,
-                new_badges,
-                source_channel=interaction.channel,
-            )
+            interaction.guild,
+            member,
+            new_badges,
+        )
+
 
 
 
@@ -1845,11 +1844,11 @@ async def turnin(interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
         if member:
             await announce_badges(
-                interaction.client,
-                member,
-                new_badges,
-                source_channel=interaction.channel,
-            )
+            interaction.guild,
+            member,
+            new_badges,
+        )
+
 
 
 
