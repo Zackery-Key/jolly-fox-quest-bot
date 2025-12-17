@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import Dict, Optional
 import discord
+import os
 
 FACTION_ROLE_IDS = {
-    "shieldborne": 1447646082459762761,
-    "spellfire":   1447646480889548800,
-    "verdant":     1447644562397859921,
+    "shieldborne": int(os.getenv("ROLE_SHIELDBORNE_ID", 0)),
+    "spellfire":   int(os.getenv("ROLE_SPELLFIRE_ID", 0)),
+    "verdant":     int(os.getenv("ROLE_VERDANT_ID", 0)),
 }
 
 

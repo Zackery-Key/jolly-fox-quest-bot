@@ -27,8 +27,8 @@ from discord import app_commands
 
 # ========= Constants / IDs =========
 
-POINTS_LOG_CHANNEL_ID = 1450165120159191172
-BADGE_ANNOUNCE_CHANNEL_ID = 1448903133899259914
+POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
+BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
@@ -1676,13 +1676,14 @@ async def skill(interaction: discord.Interaction):
             ),
         )
     else:
-        msg = result_text
-        if gained > 0:
-            msg += f"\n\n✨ You earned **{gained}** guild points."
-        else:
-            msg += "\n\nYou complete the task."
-
-        await interaction.followup.send(msg)
+        await interaction.followup.send(
+            (
+                f"🎯 **Training Complete**\n\n"
+                f"{result_text}\n\n"
+                f"✨ You earned **{gained}** guild points."
+            ),
+            ephemeral=False
+        )
 
 @bot.tree.command(name="checkin", description="Complete a TRAVEL quest by checking in at the right location.")
 async def checkin(interaction: discord.Interaction):
@@ -1791,9 +1792,10 @@ async def fetch(interaction: discord.Interaction):
     )
 
     await interaction.followup.send(
-        f"📦 You gather **{item_name}**.\n\n"
-        f"Now take it to {turnin_hint} to complete your quest."
-    )
+    f"📦 You gather **{item_name}**.\n\n"
+    f"Now take it to {turnin_hint} to complete your quest.",
+    ephemeral=True
+)
 
 @bot.tree.command(name="turnin", description="Turn in the collected item for your FETCH quest.")
 async def turnin(interaction: discord.Interaction):
