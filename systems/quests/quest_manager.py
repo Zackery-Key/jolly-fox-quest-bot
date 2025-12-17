@@ -5,6 +5,7 @@ from . import storage
 from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
 
+<<<<<<< HEAD
 def evaluate_automatic_badges(player):
     newly_awarded = []
 
@@ -18,6 +19,12 @@ def evaluate_automatic_badges(player):
 
     return newly_awarded
 
+=======
+# =====================
+# Guild Point Settings
+# =====================
+GUILD_POINTS_PER_QUEST = 5
+>>>>>>> 1b0a1b1a34fa18a0c518d38a28caffa3a982dddc
 
 class QuestManager:
     def __init__(self):
@@ -187,14 +194,9 @@ class QuestManager:
     def save_board(self):
         storage.save_board(self.quest_board)
 
-    def award_points(self, user_id: int, amount: int, faction_id: str | None = None):
-        """
-        Award guild points for a quest completion.
-        Always increases global points.
-        Also increases faction points if faction_id is provided.
-        """
-        if amount <= 0:
-            return
+    def award_points(self, user_id: int, amount: int | None = None, faction_id: str | None = None):
+        # GLOBAL RULE: every quest completion is worth 5 guild points
+        amount = GUILD_POINTS_PER_QUEST
 
         player = self.get_or_create_player(user_id)
 

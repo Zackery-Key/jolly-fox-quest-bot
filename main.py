@@ -1580,7 +1580,11 @@ async def talk(interaction: discord.Interaction):
 
 
     faction_id = get_member_faction_id(interaction.user)
+<<<<<<< HEAD
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
+=======
+    quest_manager.award_points(interaction.user_id, faction_id)
+>>>>>>> 1b0a1b1a34fa18a0c518d38a28caffa3a982dddc
     await refresh_quest_board(interaction.client)
 
     # -------------------------------------------------------------
@@ -1659,7 +1663,7 @@ async def skill(interaction: discord.Interaction):
 
     if gained > 0:
         faction_id = get_member_faction_id(interaction.user)
-        quest_manager.award_points(interaction.user.id, gained, faction_id)
+        quest_manager.award_points(interaction.user_id, faction_id)
         await refresh_quest_board(interaction.client)
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
@@ -1732,7 +1736,11 @@ async def checkin(interaction: discord.Interaction):
 
 
     faction_id = get_member_faction_id(interaction.user)
+<<<<<<< HEAD
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
+=======
+    quest_manager.award_points(interaction.user_id, faction_id)
+>>>>>>> 1b0a1b1a34fa18a0c518d38a28caffa3a982dddc
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
@@ -1872,7 +1880,11 @@ async def turnin(interaction: discord.Interaction):
 
 
     faction_id = get_member_faction_id(interaction.user)
+<<<<<<< HEAD
     quest_manager.award_points(interaction.user.id, QUEST_POINTS, faction_id)
+=======
+    quest_manager.award_points(interaction.user_id, faction_id)
+>>>>>>> 1b0a1b1a34fa18a0c518d38a28caffa3a982dddc
     await refresh_quest_board(interaction.client)
 
     await send_npc_response(
