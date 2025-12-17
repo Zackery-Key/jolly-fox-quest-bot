@@ -188,8 +188,6 @@ class QuestManager:
         storage.save_board(self.quest_board)
 
     def award_points(self, user_id: int, amount: int | None = None, faction_id: str | None = None):
-        # GLOBAL RULE: every quest completion is worth 5 guild points
-        amount = GUILD_POINTS_PER_QUEST
 
         player = self.get_or_create_player(user_id)
 
