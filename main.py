@@ -31,6 +31,8 @@ from discord import app_commands
 
 POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
 BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
+GRIMBALD_ROLE_ID = int(os.getenv("GRIMBALD_ROLE_ID"))
+TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
@@ -49,6 +51,7 @@ if not TOKEN or not GUILD_ID:
 
 intents = discord.Intents.default()
 intents.members = True
+npc_webhook_cache: dict[int, discord.Webhook] = {}
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -754,6 +757,38 @@ def pick_tavern_response(npc, intent: str) -> str:
 
     return npc.default_reply or "Grimbald gives a quiet nod."
 
+def mentions_grimbald(message: discord.Message) -> bool:
+    return any(role.id == GRIMBALD_ROLE_ID for role in message.role_mentions)
+
+async def get_npc_webhook(channel: discord.TextChannel, npc_name: str) -> discord.Webhook:
+    # Return cached webhook if exists
+    if channel.id in npc_webhook_cache:
+        return npc_webhook_cache[channel.id]
+
+    webhooks = await channel.webhooks()
+    for hook in webhooks:
+        if hook.name == f"NPC-{npc_name}":
+            npc_webhook_cache[channel.id] = hook
+            return hook
+
+    # Create new webhook if none found
+    hook = await channel.create_webhook(name=f"NPC-{npc_name}")
+    npc_webhook_cache[channel.id] = hook
+    return hook
+
+async def send_as_npc(
+    channel: discord.TextChannel,
+    npc,
+    content: str
+):
+    webhook = await get_npc_webhook(channel, npc.name)
+
+    await webhook.send(
+        content,
+        username=npc.name,
+        avatar_url=npc.avatar_url,
+        allowed_mentions=discord.AllowedMentions.none()
+    )
 
 
 
@@ -1924,38 +1959,40 @@ async def on_member_remove(member: discord.Member):
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Always allow commands to process
     await bot.process_commands(message)
 
-    # Ignore bots
     if message.author.bot:
         return
 
-    # 🔒 Tavern-only
-    TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
+    # Tavern gate
+    TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID"))
     if message.channel.id != TAVERN_CHANNEL_ID:
         return
 
-    content = message.content.strip().lower()
-    if not content.startswith("grimbald"):
+    # Must explicitly ping Grimbald role
+    if not mentions_grimbald(message):
         return
 
-    # Strip invocation word
-    user_input = content.replace("grimbald", "", 1).strip()
+    # Remove role mention text
+    content = message.content
+    for role in message.role_mentions:
+        if role.id == GRIMBALD_ROLE_ID:
+            content = content.replace(role.mention, "")
+    content = content.strip().lower()
 
     npc = quest_manager.get_npc("grimbald")
     if not npc:
         return
 
-    # Detect intent
-    intent = detect_tavern_intent(user_input)
-
-    # Pick response
+    intent = detect_tavern_intent(content)
     response = pick_tavern_response(npc, intent)
 
     if response:
-        await message.channel.send(
-            f"🍺 **Grimbald**\n{response}"
-        )
+        async with message.channel.typing():
+            await send_as_npc(
+                message.channel,
+                npc,
+                response
+            )
 
 bot.run(TOKEN)
