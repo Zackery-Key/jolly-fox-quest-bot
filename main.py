@@ -822,16 +822,19 @@ async def season_boss_set(
 @bot.tree.command(name="badge_backfill_join_dates",description="Admin: Grant beta/founder badges based on join date.")
 @app_commands.default_permissions(manage_guild=True)
 async def badge_backfill_join_dates(interaction: discord.Interaction):
-    if not require_admin(interaction):
-        return await interaction.response.send_message(
-            "❌ No permission.",
-            ephemeral=True,
-        )
+    await interaction.response.defer(ephemeral=True)
 
     guild = interaction.guild
-    granted = 0
+    if not guild:
+        return
 
-    for member in guild.members:
+    granted = 0
+    scanned = 0
+
+    # 🔥 FORCE FETCH ALL MEMBERS
+    async for member in guild.fetch_members(limit=None):
+        scanned += 1
+
         player = quest_manager.get_or_create_player(member.id)
         new_badges = evaluate_join_date_badges(member, player)
 
@@ -840,8 +843,10 @@ async def badge_backfill_join_dates(interaction: discord.Interaction):
 
     quest_manager.save_players()
 
-    await interaction.response.send_message(
-        f"🦊 Backfill complete. Granted **{granted}** join-date badges.",
+    await interaction.followup.send(
+        f"🧪 Backfill complete.\n"
+        f"Scanned **{scanned}** members.\n"
+        f"Granted **{granted}** badges.",
         ephemeral=True,
     )
 
