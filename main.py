@@ -272,7 +272,6 @@ def build_profile_embed(
     return embed
 
 async def refresh_quest_board(bot: commands.Bot):
-    """Update the existing quest board message if we have one saved."""
     board = quest_manager.quest_board
 
     if not board.display_channel_id or not board.message_id:
@@ -285,7 +284,18 @@ async def refresh_quest_board(bot: commands.Bot):
 
         msg = await channel.fetch_message(board.message_id)
         embed = build_board_embed()
-        await msg.edit(embed=embed,view=QuestBoardView())
+        await msg.edit(embed=embed, view=QuestBoardView())
+
+    except discord.NotFound:
+        # 🔥 AUTO-HEAL: message was deleted
+        print("⚠ Quest board message missing. Clearing anchor.")
+
+        board.display_channel_id = None
+        board.message_id = None
+        quest_manager.save_board()
+
+    except discord.Forbidden as e:
+        print("⚠ Quest board forbidden:", e)
 
     except Exception as e:
         print("⚠ Failed to refresh quest board:", e)
@@ -1354,13 +1364,20 @@ async def quest_admin_set_board_meta(
         ephemeral=True,
     )
 
-@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset the current season (board + player seasonal stats).")
+@bot.tree.command(name="quest_admin_reset_board",description="Admin: Reset the current season and force board recreation.")
 @app_commands.default_permissions(manage_guild=True)
 async def quest_admin_reset_board(interaction: discord.Interaction):
     if not require_admin(interaction):
-        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+        return await interaction.response.send_message(
+            "❌ No permission.",
+            ephemeral=True,
+        )
 
     board = quest_manager.quest_board
+
+    # 🔥 CLEAR BOARD ANCHOR (THIS IS THE HEAL)
+    board.display_channel_id = None
+    board.message_id = None
 
     # 🔄 RESET BOARD STATE
     board.global_points = 0
@@ -1370,29 +1387,12 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
     for player in quest_manager.players.values():
         player.season_completed = 0
 
-    # Persist everything
     quest_manager.save_players()
     quest_manager.save_board()
 
-    await refresh_quest_board(interaction.client)
-
-    await log_admin_action(
-        interaction.client,
-        (
-            f"🧹 **Season Progress Reset**\n"
-            f"• Guild points cleared\n"
-            f"• Faction standings reset\n"
-            f"• Player seasonal progress reset\n"
-            f"• By: {interaction.user.mention}"
-        )
-    )
-
     await interaction.response.send_message(
         "🧹 **Season reset complete.**\n"
-        "• Guild points cleared\n"
-        "• Faction standings reset\n"
-        "• Player seasonal progress reset\n\n"
-        "_Lifetime stats were not affected._",
+        "The quest board will be recreated the next time `/quest_board` is run.",
         ephemeral=True,
     )
 
