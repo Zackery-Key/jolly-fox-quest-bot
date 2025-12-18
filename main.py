@@ -716,7 +716,15 @@ def detect_tavern_intent(text: str) -> str:
     if not text:
         return "base"
 
-    text = text.lower()
+    text = text.lower().strip()
+
+    # 👋 Greeting detection (NEW)
+    greetings = [
+        "hey", "hi", "hello", "hail", "evening", "evenin",
+        "good evening", "good day", "greetings", "morning", "good morning"
+    ]
+    if any(text == g or text.startswith(g + " ") for g in greetings):
+        return "greeting"
 
     # Second-person questions about Grimbald → deflection
     second_person_markers = [
@@ -743,15 +751,18 @@ def detect_tavern_intent(text: str) -> str:
     return "unknown"
 
 def pick_tavern_response(npc, intent: str) -> str:
-    if intent == "base":
+    # Base invocation or greeting → same pool
+    if intent in ("base", "greeting"):
         return random.choice(npc.greetings)
 
+    # Unknown / deflection
     if intent == "unknown":
         pool = npc.quest_dialogue.get("UNKNOWN", [])
         if pool:
             return random.choice(pool)
         return random.choice(npc.greetings)
 
+    # Intent-based dialogue (DRINK, WORD, WORK, FOOD, etc.)
     pool = npc.quest_dialogue.get(intent.upper(), [])
     if pool:
         return random.choice(pool)
