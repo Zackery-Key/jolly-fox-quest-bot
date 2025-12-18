@@ -718,45 +718,45 @@ def detect_tavern_intent(text: str) -> str:
 
     text = text.lower()
 
-    # 🛑 Guard: second-person questions about NPC
+    # Second-person questions about Grimbald → deflection
     second_person_markers = [
         "are you",
         "do you",
         "you are",
         "you're",
     ]
-
     if any(marker in text for marker in second_person_markers):
-        return "base"
+        return "unknown"
 
     intents = {
         "drink": ["drink", "ale", "beer", "mead", "thirsty"],
         "word": ["word", "rumor", "rumours", "gossip", "heard", "news", "talk"],
         "work": ["work", "job", "quest", "help", "hiring"],
+        "food": ["food","eat","eating","meal","meals","dinner","lunch","breakfast","stew","soup","bread","cheese","meat","snack","snacks","grub","rations","hungry","starving","famished"]
     }
 
-    # ✅ Prefer explicit nouns or first-person phrasing
     for intent, keywords in intents.items():
         if any(k in text for k in keywords):
             return intent
 
-    return "base"
+    # If text exists but no intent matched
+    return "unknown"
 
 def pick_tavern_response(npc, intent: str) -> str:
-    # Instructional base response
     if intent == "base":
-        return random.choice(npc.greetings) if npc.greetings else (
-            "Aye, welcome in. If ye’re thirsty, say **drink**. "
-            "If ye want a word, ask for **talk**. "
-            "If ye’re lookin’ for **work**, just say so."
-        )
+        return random.choice(npc.greetings)
 
-    # Intent-specific dialogue pools
-    pools = npc.quest_dialogue.get(intent.upper(), [])
-    if pools:
-        return random.choice(pools)
+    if intent == "unknown":
+        pool = npc.quest_dialogue.get("UNKNOWN", [])
+        if pool:
+            return random.choice(pool)
+        return random.choice(npc.greetings)
 
-    return npc.default_reply or "Grimbald gives a quiet nod."
+    pool = npc.quest_dialogue.get(intent.upper(), [])
+    if pool:
+        return random.choice(pool)
+
+    return npc.default_reply
 
 def mentions_grimbald(message: discord.Message) -> bool:
     return any(role.id == GRIMBALD_ROLE_ID for role in message.role_mentions)
