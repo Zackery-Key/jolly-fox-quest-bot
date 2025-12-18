@@ -48,6 +48,8 @@ if not TOKEN or not GUILD_ID:
 # ========= Bot Setup =========
 
 intents = discord.Intents.default()
+intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
