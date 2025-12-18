@@ -1243,22 +1243,26 @@ async def quest_board_cmd(interaction: discord.Interaction):
             msg = await channel.fetch_message(board.message_id)
             await msg.edit(embed=embed, view=QuestBoardView())
 
-            # ✅ IMPORTANT: ephemeral confirmation ONLY
             await interaction.response.send_message(
                 "🔄 Quest board updated.",
                 ephemeral=True,
             )
-            return  # 🛑 STOP HERE — DO NOT POST A NEW BOARD
+            return
 
         except Exception as e:
             print("Quest board update failed:", e)
+            await interaction.response.send_message(
+                "⚠️ Failed to update the existing quest board.\n"
+                "Use `/quest_admin_reset_board` and rerun `/quest_board`.",
+                ephemeral=True,
+            )
+            return
 
+    # ✅ NO BOARD EXISTS → POST IT
     await interaction.response.send_message(
-        "⚠️ Failed to update the existing quest board.\n"
-        "Use `/quest_admin_reset_board` or repost the board manually if needed.",
-        ephemeral=True,
+        embed=embed,
+        view=QuestBoardView()
     )
-    return
 
     msg = await interaction.original_response()
     board.display_channel_id = msg.channel.id
