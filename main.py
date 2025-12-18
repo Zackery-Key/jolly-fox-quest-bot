@@ -31,6 +31,8 @@ from discord import app_commands
 
 POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
 BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
+GRIMBALD_ROLE_ID = int(os.getenv("GRIMBALD_ROLE_ID"))
+TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
@@ -49,6 +51,8 @@ if not TOKEN or not GUILD_ID:
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
+npc_webhook_cache: dict[int, discord.Webhook] = {}
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -707,6 +711,94 @@ async def handle_progression_announcements(guild, member, result):
         )
         embed.set_author(name=trinity.name, icon_url=trinity.avatar_url)
         await channel.send(embed=embed)
+
+def detect_tavern_intent(text: str) -> str:
+    if not text:
+        return "base"
+
+    text = text.lower()
+
+    # Second-person questions about Grimbald → deflection
+    second_person_markers = [
+        "are you",
+        "do you",
+        "you are",
+        "you're",
+    ]
+    if any(marker in text for marker in second_person_markers):
+        return "unknown"
+
+    intents = {
+        "drink": ["drink", "ale", "beer", "mead", "thirsty"],
+        "word": ["word", "rumor", "rumours", "gossip", "heard", "news", "talk"],
+        "work": ["work", "job", "quest", "help", "hiring"],
+        "food": ["food","eat","eating","meal","meals","dinner","lunch","breakfast","stew","soup","bread","cheese","meat","snack","snacks","grub","rations","hungry","starving","famished"]
+    }
+
+    for intent, keywords in intents.items():
+        if any(k in text for k in keywords):
+            return intent
+
+    # If text exists but no intent matched
+    return "unknown"
+
+def pick_tavern_response(npc, intent: str) -> str:
+    if intent == "base":
+        return random.choice(npc.greetings)
+
+    if intent == "unknown":
+        pool = npc.quest_dialogue.get("UNKNOWN", [])
+        if pool:
+            return random.choice(pool)
+        return random.choice(npc.greetings)
+
+    pool = npc.quest_dialogue.get(intent.upper(), [])
+    if pool:
+        return random.choice(pool)
+
+    return npc.default_reply
+
+def mentions_grimbald(message: discord.Message) -> bool:
+    return any(role.id == GRIMBALD_ROLE_ID for role in message.role_mentions)
+
+async def get_npc_webhook(channel: discord.TextChannel, npc_name: str) -> discord.Webhook:
+    # Return cached webhook if exists
+    if channel.id in npc_webhook_cache:
+        return npc_webhook_cache[channel.id]
+
+    webhooks = await channel.webhooks()
+    for hook in webhooks:
+        if hook.name == f"NPC-{npc_name}":
+            npc_webhook_cache[channel.id] = hook
+            return hook
+
+    # Create new webhook if none found
+    hook = await channel.create_webhook(name=f"NPC-{npc_name}")
+    npc_webhook_cache[channel.id] = hook
+    return hook
+
+async def send_as_npc(
+    channel: discord.TextChannel,
+    npc,
+    content: str
+):
+    webhook = await get_npc_webhook(channel, npc.name)
+
+    await webhook.send(
+        content,
+        username=npc.name,
+        avatar_url=npc.avatar_url,
+        allowed_mentions=discord.AllowedMentions.none()
+    )
+
+def strip_grimbald_mention(message: discord.Message) -> str:
+    content = message.content
+
+    for role in message.role_mentions:
+        if role.id == GRIMBALD_ROLE_ID:
+            content = content.replace(f"<@&{role.id}>", "")
+
+    return content.strip()
 
 
 
@@ -1626,7 +1718,7 @@ async def skill(interaction: discord.Interaction):
     )
 
         faction_id = get_member_faction_id(interaction.user)
-        quest_manager.award_points(interaction.user_id, faction_id)
+        quest_manager.award_points(interaction.user.id,QUEST_POINTS,faction_id)
         await refresh_quest_board(interaction.client)
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
@@ -1869,11 +1961,46 @@ async def on_member_join(member: discord.Member):
             }
         )
 
-
 @bot.event
 async def on_member_remove(member: discord.Member):
     user_id = member.id
     if quest_manager.clear_player(user_id):
         print(f"[CLEANUP] Removed player data for {member.display_name} ({user_id})")
+
+@bot.event
+async def on_message(message: discord.Message):
+    await bot.process_commands(message)
+
+    if message.author.bot:
+        return
+
+    # Tavern gate
+    TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID"))
+    if message.channel.id != TAVERN_CHANNEL_ID:
+        return
+
+    # Must explicitly ping Grimbald role
+    if not mentions_grimbald(message):
+        return
+
+    # Remove role mention text
+    content = strip_grimbald_mention(message)
+    content = content.lower()
+    print(f"[DEBUG] Tavern content after strip: '{content}'")
+
+    npc = quest_manager.get_npc("grimbald")
+    if not npc:
+        return
+
+    intent = detect_tavern_intent(content)
+    response = pick_tavern_response(npc, intent)
+
+    if response:
+        async with message.channel.typing():
+            await send_as_npc(
+                message.channel,
+                npc,
+                response
+            )
 
 bot.run(TOKEN)
