@@ -51,6 +51,7 @@ if not TOKEN or not GUILD_ID:
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 npc_webhook_cache: dict[int, discord.Webhook] = {}
 
 bot = commands.Bot(command_prefix="!", intents=intents)
