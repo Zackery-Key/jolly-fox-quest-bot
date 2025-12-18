@@ -721,7 +721,7 @@ def detect_tavern_intent(text: str) -> str:
     # 👋 Greeting detection (NEW)
     greetings = [
         "hey", "hi", "hello", "hail", "evening", "evenin",
-        "good evening", "good day", "greetings"
+        "good evening", "good day", "greetings", "morning", "good morning"
     ]
     if any(text == g or text.startswith(g + " ") for g in greetings):
         return "greeting"
