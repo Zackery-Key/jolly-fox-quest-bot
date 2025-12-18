@@ -797,7 +797,6 @@ def pick_tavern_response(npc, intent: str) -> str:
 
     return npc.default_reply
 
-
 def mentions_grimbald(message: discord.Message) -> bool:
     return any(role.id == GRIMBALD_ROLE_ID for role in message.role_mentions)
 
