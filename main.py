@@ -1260,7 +1260,6 @@ async def quest_board_cmd(interaction: discord.Interaction):
     )
     return
 
-
     msg = await interaction.original_response()
     board.display_channel_id = msg.channel.id
     board.message_id = msg.id
