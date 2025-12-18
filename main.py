@@ -708,6 +708,53 @@ async def handle_progression_announcements(guild, member, result):
         embed.set_author(name=trinity.name, icon_url=trinity.avatar_url)
         await channel.send(embed=embed)
 
+def detect_tavern_intent(text: str) -> str:
+    if not text:
+        return "base"
+
+    text = text.lower()
+
+    # 🛑 Guard: second-person questions about NPC
+    second_person_markers = [
+        "are you",
+        "do you",
+        "you are",
+        "you're",
+    ]
+
+    if any(marker in text for marker in second_person_markers):
+        return "base"
+
+    intents = {
+        "drink": ["drink", "ale", "beer", "mead", "thirsty"],
+        "word": ["word", "rumor", "rumours", "gossip", "heard", "news", "talk"],
+        "work": ["work", "job", "quest", "help", "hiring"],
+    }
+
+    # ✅ Prefer explicit nouns or first-person phrasing
+    for intent, keywords in intents.items():
+        if any(k in text for k in keywords):
+            return intent
+
+    return "base"
+
+def pick_tavern_response(npc, intent: str) -> str:
+    # Instructional base response
+    if intent == "base":
+        return random.choice(npc.greetings) if npc.greetings else (
+            "Aye, welcome in. If ye’re thirsty, say **drink**. "
+            "If ye want a word, ask for **talk**. "
+            "If ye’re lookin’ for **work**, just say so."
+        )
+
+    # Intent-specific dialogue pools
+    pools = npc.quest_dialogue.get(intent.upper(), [])
+    if pools:
+        return random.choice(pools)
+
+    return npc.default_reply or "Grimbald gives a quiet nod."
+
+
 
 
 # ========= ADMIN: Seasonal =========
@@ -1869,11 +1916,46 @@ async def on_member_join(member: discord.Member):
             }
         )
 
-
 @bot.event
 async def on_member_remove(member: discord.Member):
     user_id = member.id
     if quest_manager.clear_player(user_id):
         print(f"[CLEANUP] Removed player data for {member.display_name} ({user_id})")
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Always allow commands to process
+    await bot.process_commands(message)
+
+    # Ignore bots
+    if message.author.bot:
+        return
+
+    # 🔒 Tavern-only
+    TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
+    if message.channel.id != TAVERN_CHANNEL_ID:
+        return
+
+    content = message.content.strip().lower()
+    if not content.startswith("grimbald"):
+        return
+
+    # Strip invocation word
+    user_input = content.replace("grimbald", "", 1).strip()
+
+    npc = quest_manager.get_npc("grimbald")
+    if not npc:
+        return
+
+    # Detect intent
+    intent = detect_tavern_intent(user_input)
+
+    # Pick response
+    response = pick_tavern_response(npc, intent)
+
+    if response:
+        await message.channel.send(
+            f"🍺 **Grimbald**\n{response}"
+        )
 
 bot.run(TOKEN)
