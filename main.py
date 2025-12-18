@@ -790,6 +790,15 @@ async def send_as_npc(
         allowed_mentions=discord.AllowedMentions.none()
     )
 
+def strip_grimbald_mention(message: discord.Message) -> str:
+    content = message.content
+
+    for role in message.role_mentions:
+        if role.id == GRIMBALD_ROLE_ID:
+            content = content.replace(f"<@&{role.id}>", "")
+
+    return content.strip()
+
 
 
 # ========= ADMIN: Seasonal =========
@@ -1708,7 +1717,7 @@ async def skill(interaction: discord.Interaction):
     )
 
         faction_id = get_member_faction_id(interaction.user)
-        quest_manager.award_points(interaction.user_id, faction_id)
+        quest_manager.award_points(interaction.user.id,QUEST_POINTS,faction_id)
         await refresh_quest_board(interaction.client)
 
     # 🎭 NPC = embed | ⚙️ No NPC = text
@@ -1974,11 +1983,9 @@ async def on_message(message: discord.Message):
         return
 
     # Remove role mention text
-    content = message.content
-    for role in message.role_mentions:
-        if role.id == GRIMBALD_ROLE_ID:
-            content = content.replace(role.mention, "")
-    content = content.strip().lower()
+    content = strip_grimbald_mention(message)
+    content = content.lower()
+    print(f"[DEBUG] Tavern content after strip: '{content}'")
 
     npc = quest_manager.get_npc("grimbald")
     if not npc:
