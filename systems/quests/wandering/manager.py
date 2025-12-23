@@ -31,26 +31,6 @@ DIFFICULTY_SPAWN_WEIGHT = {
     "test": 100,
 }
 
-def pick_random_monster(self):
-    monsters = WANDERING_MONSTERS
-    weights = [m["weight"] for m in monsters]
-    return random.choices(monsters, weights=weights, k=1)[0]
-
-async def scheduled_spawn_loop(self, bot):
-    while True:
-        await asyncio.sleep(EVENT_INTERVAL)
-
-        if self.active and not self.active.resolved:
-            continue
-
-        monster = self.pick_random_monster()
-        await self.spawn(
-            bot=bot,
-            title=monster["title"],
-            description=monster["description"],
-            difficulty=monster["difficulty"],
-        )
-
 class WanderingEventManager:
     def __init__(self, quest_manager, luneth_channel_id: int):
         self.quest_manager = quest_manager
@@ -309,3 +289,23 @@ class WanderingEventManager:
                 pass
 
         asyncio.create_task(_deleter())
+
+    def pick_random_monster(self):
+        monsters = WANDERING_MONSTERS
+        weights = [m["weight"] for m in monsters]
+        return random.choices(monsters, weights=weights, k=1)[0]
+
+    async def scheduled_spawn_loop(self, bot):
+        while True:
+            await asyncio.sleep(EVENT_INTERVAL)
+
+            if self.active and not self.active.resolved:
+                continue
+
+            monster = self.pick_random_monster()
+            await self.spawn(
+                bot=bot,
+                title=monster["title"],
+                description=monster["description"],
+                difficulty=monster["difficulty"],
+            )

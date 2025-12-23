@@ -19,7 +19,6 @@ class WanderingEvent:
 
     faction_reward: int
     global_reward: int
-    player_reward: int
 
     participants: Set[int] = field(default_factory=set)          # user_ids
     participating_factions: Set[str] = field(default_factory=set) # "shieldborne", etc.
