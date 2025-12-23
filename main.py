@@ -88,7 +88,7 @@ def build_board_embed():
 
     global_points = stats["global_points"]
     season_completed = stats["season_quest_completed"]
-    monsters_completed = stats["Season_monsters_completed"]
+    monsters_completed = stats["season_monsters_completed"]
 
     # Use board.season_goal but default to 100 if something weird
     season_goal = board.season_goal if getattr(board, "season_goal", 0) > 0 else 100
