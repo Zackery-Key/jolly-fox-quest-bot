@@ -342,7 +342,11 @@ class WanderingEventManager:
         asyncio.create_task(_deleter())
 
     def pick_random_monster(self):
-        monsters = WANDERING_MONSTERS
+        monsters = [
+            m for m in WANDERING_MONSTERS
+            if m["difficulty"] != "test"
+        ]
+
         weights = [m["weight"] for m in monsters]
         return random.choices(monsters, weights=weights, k=1)[0]
 
