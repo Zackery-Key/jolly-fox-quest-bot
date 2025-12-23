@@ -18,7 +18,6 @@ from datetime import datetime, timedelta, timezone
 EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
 WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 SPAWN_HOURS = [0, 4, 8, 12, 16, 20]
-PING_DIFFICULTIES = {"major", "critical"}
 
 DIFFICULTY_TABLE = {
     "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
@@ -193,23 +192,10 @@ class WanderingEventManager:
 
         channel = bot.get_channel(self.luneth_channel_id) or await bot.fetch_channel(self.luneth_channel_id)
         
-        PING_DIFFICULTIES = {"major", "critical"}
-
-        DIFFICULTY_ALERT_TEXT = {
-            "major": "☠️ **Major wandering threat detected!**",
-            "critical": "💀 **CRITICAL THREAT — ALL HANDS!**",
-        }
-
-        content = DIFFICULTY_ALERT_TEXT.get(
-            difficulty,
-            "🐲 **A wandering threat has appeared!**"
-        )
-
-        if difficulty in PING_DIFFICULTIES:
-            content += f" <@&{WANDERING_PING_ROLE_ID}>"
+        ping = f"<@&{WANDERING_PING_ROLE_ID}>"
 
         msg = await channel.send(
-            content=content,
+            content=f"⚠️ **A wandering threat has appeared!** {ping}",
             embed=self.build_event_embed(event),
             view=WanderingEventView(self, event.event_id),
         )
