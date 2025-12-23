@@ -13,6 +13,7 @@ from .storage import save_active_event, load_active_event
 
 
 DIFFICULTY_TABLE = {
+    "test":    {"minutes": 5, "required": 1,  "faction": 10, "global": 10, "player": 5},
     "minor":    {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "player": 5},
     "standard": {"minutes": 20, "required": 5,  "faction": 20, "global": 20, "player": 5},
     "major":    {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "player": 5},
