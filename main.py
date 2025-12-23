@@ -25,6 +25,7 @@ from systems.badges.definitions import BADGES
 from systems.quests.quest_manager import evaluate_join_date_badges
 from discord import app_commands
 from systems.quests.wandering import WanderingEventManager
+from typing import Literal
 
 
 # ========= Constants / IDs =========
@@ -963,8 +964,6 @@ async def season_boss_set(
         "✅ Boss updated successfully.",
         ephemeral=True,
     )
-
-from typing import Literal
 
 @bot.tree.command(name="quest_admin_spawn_event", description="Admin: Spawn a wandering event in Luneth Vale.")
 @app_commands.default_permissions(manage_guild=True)

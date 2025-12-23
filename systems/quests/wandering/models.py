@@ -10,6 +10,7 @@ class WanderingEvent:
     channel_id: int
     message_id: Optional[int]
     ends_at: datetime
+    duration_minutes: int
 
     title: str
     description: str

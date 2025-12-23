@@ -33,9 +33,6 @@ class WanderingEventManager:
 
     # ---------- Embeds ----------
     def build_event_embed(self, event: WanderingEvent) -> discord.Embed:
-        remaining = max(0, int((event.ends_at - datetime.now(timezone.utc)).total_seconds()))
-        mins = remaining // 60
-        secs = remaining % 60
 
         embed = discord.Embed(
             title=f"🐲 Wandering Threat: {event.title}",
@@ -43,12 +40,8 @@ class WanderingEventManager:
             color=discord.Color.dark_purple(),
         )
         embed.add_field(name="Difficulty", value=event.difficulty.title(), inline=True)
-        embed.add_field(name="Time Remaining", value=f"{mins:02d}:{secs:02d}", inline=True)
-        embed.add_field(
-            name="Participants",
-            value=f"{len(event.participants)} / {event.required_participants}",
-            inline=True
-        )
+        embed.add_field(name="⏳ Event Duration",value=f"{event.duration_minutes} minutes",inline=True,)
+        embed.add_field(name="Participants",value=f"{len(event.participants)} / {event.required_participants}",inline=True)
         embed.set_footer(text="Join the hunt before it vanishes into the mist.")
         return embed
 
@@ -132,6 +125,7 @@ class WanderingEventManager:
             event_id=secrets.token_hex(8),
             channel_id=self.luneth_channel_id,
             message_id=None,
+            duration_minutes = cfg["minutes"],
             ends_at=ends_at,
             title=title,
             description=description,
@@ -168,18 +162,26 @@ class WanderingEventManager:
 
         # Determine the player's faction from your existing system
         player = self.quest_manager.get_player(user_id)
-        if not player.faction_id:
-            return await interaction.response.send_message("⚠️ You must pick a faction first.", ephemeral=True)
+
+        if user_id in event.participants:
+            return await interaction.response.send_message(
+                "✅ You’re already participating.",
+                ephemeral=True,
+            )
 
         event.participants.add(user_id)
-        event.participating_factions.add(player.faction_id)
+
+        if player.faction_id:
+            event.participating_factions.add(player.faction_id)
 
         save_active_event(event)
 
-        # Update the message embed in-place
         await self._refresh_active_message(interaction.client)
 
-        await interaction.response.send_message("⚔️ Joined! Your faction’s answer is counted.", ephemeral=True)
+        await interaction.response.send_message(
+            "⚔️ You’ve joined the event!",
+            ephemeral=True,
+        )
 
     async def resolve_active(self, bot: discord.Client):
         event = self.active
