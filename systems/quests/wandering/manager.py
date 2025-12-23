@@ -167,11 +167,11 @@ class WanderingEventManager:
 
         # Determine the player's faction from your existing system
         player = self.quest_manager.get_player(user_id)
-        if not player.faction:
+        if not player.faction_id:
             return await interaction.response.send_message("⚠️ You must pick a faction first.", ephemeral=True)
 
         event.participants.add(user_id)
-        event.participating_factions.add(player.faction)
+        event.participating_factions.add(player.faction_id)
 
         save_active_event(event)
 
