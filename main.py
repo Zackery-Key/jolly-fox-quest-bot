@@ -24,24 +24,31 @@ from systems.seasonal.storage import load_season, save_season
 from systems.badges.definitions import BADGES
 from systems.quests.quest_manager import evaluate_join_date_badges
 from discord import app_commands
-
+from systems.quests.wandering import WanderingEventManager
+from typing import Literal
 
 
 # ========= Constants / IDs =========
 
+# Env
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID", 0))
 POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
 BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
 GRIMBALD_ROLE_ID = int(os.getenv("GRIMBALD_ROLE_ID"))
 TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
+LUNETH_VALE_CHANNEL_ID = int(os.getenv("LUNETH_VALE_CHANNEL_ID", 0))
+WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
 quest_manager = QuestManager()
 print("QUEST MANAGER INITIALIZED")
 
-# Env
-TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = int(os.getenv("GUILD_ID", 0))
+wandering_manager = WanderingEventManager(
+    quest_manager=quest_manager,
+    luneth_channel_id=LUNETH_VALE_CHANNEL_ID,
+)
 
 if not TOKEN or not GUILD_ID:
     raise ValueError("Missing DISCORD_TOKEN or GUILD_ID environment variable.")
@@ -70,14 +77,19 @@ def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     empty = length - filled
     return f"[{'█' * filled}{'░' * empty}]"
 
+def get_crown_holder(faction_points: dict[str, int]) -> str | None:
+    if not faction_points:
+        return None
+    return max(faction_points.items(), key=lambda x: x[1])[0]
+
 def build_board_embed():
     """Build the quest board embed including faction standings."""
     stats = quest_manager.get_scoreboard()
     board = quest_manager.quest_board
 
     global_points = stats["global_points"]
-    lifetime_completed = stats["lifetime_completed"]
-    season_completed = stats["season_completed"]
+    season_completed = stats["season_quest_completed"]
+    monsters_completed = stats["season_monsters_completed"]
 
     # Use board.season_goal but default to 100 if something weird
     season_goal = board.season_goal if getattr(board, "season_goal", 0) > 0 else 100
@@ -115,45 +127,56 @@ def build_board_embed():
         inline=False,
     )
 
+    embed.add_field(
+        name="⚡ Faction Power Progress",
+        value=(
+            "Each faction advances independently.\n"
+            "Reaching the goal unlocks a **one-time faction power** for the final boss."
+        ),
+        inline=False,
+    )
+
     # Faction standings
     faction_points = board.faction_points or {}
-    faction_lines: list[str] = []
 
-    max_pts = max(faction_points.values()) if faction_points else 0
-    leaders = {
-        fid
-        for fid, pts in faction_points.items()
-        if pts == max_pts and max_pts > 0
-    }
+    faction_goal = board.faction_goal if getattr(board, "faction_goal", 0) > 0 else 250
 
     for faction_id, fac in FACTIONS.items():
         pts = faction_points.get(faction_id, 0)
-        crown = " 👑" if faction_id in leaders else ""
-        faction_lines.append(f"{fac.emoji} **{fac.name}** — {pts} pts{crown}")
+        bar = make_progress_bar(pts, faction_goal)
 
-    if not faction_lines:
-        faction_lines.append("No faction points yet. Get questing!")
+        unlocked = pts >= faction_goal
+        status = " ⚡ **UNLOCKED**" if unlocked else ""
 
-    embed.add_field(
-        name="⚔️ Faction Standings",
-        value="\n".join(faction_lines),
-        inline=False,
-    )
+        embed.add_field(
+            name=f"{fac.emoji} {fac.name}",
+            value=f"{pts} / {faction_goal} pts{status}\n{bar}",
+            inline=False,
+        )
+
+    crown_holder = get_crown_holder(faction_points)
+    if crown_holder:
+        embed.add_field(
+            name="👑 Crown Holder",
+            value=FACTIONS[crown_holder].name,
+            inline=False,
+        )
 
     # Quest counts
     embed.add_field(
         name="🏆 Quests Completed This Season",
         value=str(season_completed),
-        inline=True,
-    )
-    embed.add_field(
-        name="🌟 Lifetime Quests Completed (All Players)",
-        value=str(lifetime_completed),
-        inline=True,
+        inline=False,
     )
 
+    embed.add_field(
+        name="🐲 Wandering Threats Cleared",
+        value=str(monsters_completed),
+        inline=False,
+    )
+    
     embed.set_footer(
-        text="Every completed quest pushes the Jolly Fox further this season."
+        text="You get one quest a day and they reset at 00:00 UTC"
     )
 
     return embed
@@ -258,6 +281,15 @@ def build_profile_embed(
     embed.add_field(
         name="🏅 Badges",
         value=badge_text,
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🐲 Wandering Threats Cleared",
+        value=(
+            f"**Seasonal Completed:** {player.monsters_season}\n"
+            f"**Lifetime Completed:** {player.monsters_lifetime}"
+        ),
         inline=False,
     )
 
@@ -592,6 +624,7 @@ class QuestBoardView(discord.ui.View):
         custom_id="quest_board:view_profile"
     )
     async def view_profile(self, interaction: discord.Interaction, button):
+
         await interaction.response.defer(ephemeral=True)
 
         player = quest_manager.get_or_create_player(interaction.user.id)
@@ -602,6 +635,46 @@ class QuestBoardView(discord.ui.View):
         )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @discord.ui.button(
+        label="🔔 Wandering Alerts",
+        style=discord.ButtonStyle.secondary,
+        custom_id="quest_board:toggle_wandering_alerts",
+    )
+        
+    async def toggle_wandering_alerts(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "⚠️ This can only be used in a server.",
+                ephemeral=True,
+            )
+
+        role = interaction.guild.get_role(WANDERING_PING_ROLE_ID)
+        if not role:
+            return await interaction.response.send_message(
+                "⚠️ Alert role not configured.",
+                ephemeral=True,
+            )
+
+        member = interaction.user
+
+        if role in member.roles:
+            await member.remove_roles(role)
+            await interaction.response.send_message(
+                "🔕 Wandering threat alerts **disabled**.",
+                ephemeral=True,
+            )
+        else:
+            await member.add_roles(role)
+            await interaction.response.send_message(
+                "🔔 Wandering threat alerts **enabled**!",
+                ephemeral=True,
+            )
+
 
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild
@@ -797,7 +870,6 @@ def pick_tavern_response(npc, intent: str) -> str:
 
     return npc.default_reply
 
-
 def mentions_grimbald(message: discord.Message) -> bool:
     return any(role.id == GRIMBALD_ROLE_ID for role in message.role_mentions)
 
@@ -840,9 +912,10 @@ def strip_grimbald_mention(message: discord.Message) -> str:
 
     return content.strip()
 
+wandering_manager.refresh_board_callback = refresh_quest_board
 
 
-# ========= ADMIN: Seasonal =========
+# ========= ADMIN: Seasonal and Events =========
 
 @bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
 @app_commands.default_permissions(manage_guild=True)
@@ -948,6 +1021,25 @@ async def season_boss_set(
         "✅ Boss updated successfully.",
         ephemeral=True,
     )
+
+@bot.tree.command(name="quest_admin_spawn_event", description="Admin: Spawn a wandering event in Luneth Vale.")
+@app_commands.default_permissions(manage_guild=True)
+async def quest_admin_spawn_event(
+    interaction: discord.Interaction,
+    difficulty: Literal["test", "minor", "standard", "major", "critical"],
+    title: str,
+    description: str,
+):
+    try:
+        await wandering_manager.spawn(
+            bot=interaction.client,
+            title=title,
+            description=description,
+            difficulty=difficulty,
+        )
+        await interaction.response.send_message("✅ Wandering event spawned.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"⚠️ Could not spawn event: {e}", ephemeral=True)
 
 
 
@@ -1425,6 +1517,7 @@ async def quest_admin_set_season(
     interaction: discord.Interaction,
     season_id: str,
     season_goal: int,
+    faction_goal: int,
     season_reward: str | None = None,
 ):
     if not require_admin(interaction):
@@ -1433,6 +1526,7 @@ async def quest_admin_set_season(
     board = quest_manager.quest_board
     board.reset_season(season_id)
     board.season_goal = max(1, season_goal)
+    board.faction_goal = max(1, faction_goal)
     board.season_reward = season_reward or ""
 
     quest_manager.save_board()
@@ -1443,7 +1537,8 @@ async def quest_admin_set_season(
         (
             f"📅 **Season Started / Reset**\n"
             f"• Season ID: **{season_id}**\n"
-            f"• Goal: **{board.season_goal}** points\n"
+            f"• Guild Goal: **{board.season_goal}** points\n"
+            f"• Faction Power Goal: **{board.faction_goal}** points\n"
             f"• Reward: {board.season_reward or 'None'}\n"
             f"• By: {interaction.user.mention}"
         )
@@ -1460,12 +1555,13 @@ async def quest_admin_set_season(
 async def quest_admin_set_board_meta(
     interaction: discord.Interaction,
     season_goal: int | None = None,
+    faction_goal: int | None = None,
     season_reward: str | None = None,
 ):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
-    if season_goal is None and season_reward is None:
+    if season_goal is None and faction_goal is None and season_reward is None:
         await interaction.response.send_message(
             "⚠️ You must provide at least one of `season_goal` or `season_reward`.",
             ephemeral=True,
@@ -1478,6 +1574,8 @@ async def quest_admin_set_board_meta(
         board.season_goal = max(1, season_goal)
     if season_reward is not None:
         board.season_reward = season_reward
+    if faction_goal is not None:
+        board.faction_goal = max(1, faction_goal)
 
     quest_manager.save_board()
     await refresh_quest_board(interaction.client)
@@ -1489,6 +1587,9 @@ async def quest_admin_set_board_meta(
 
     if season_reward is not None:
         log_lines.append(f"• New Reward: {board.season_reward}")
+    
+    if faction_goal is not None:
+        log_lines.append(f"• New Faction Power Goal: **{board.faction_goal}** points")
 
     log_lines.append(f"• By: {interaction.user.mention}")
 
@@ -1525,6 +1626,7 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
     # 🔄 RESET PLAYER SEASONAL STATS
     for player in quest_manager.players.values():
         player.season_completed = 0
+        player.monsters_season = 0
 
     quest_manager.save_players()
     quest_manager.save_board()
@@ -1975,6 +2077,11 @@ async def on_ready():
 
     # Sync commands (you already do this)
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+    await wandering_manager.startup_resume(bot)
+
+    bot.loop.create_task(
+        wandering_manager.scheduled_spawn_loop(bot)
+    )
 
     # 🔹 AUTO refresh quest board
     try:
