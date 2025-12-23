@@ -38,6 +38,7 @@ BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
 GRIMBALD_ROLE_ID = int(os.getenv("GRIMBALD_ROLE_ID"))
 TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
 LUNETH_VALE_CHANNEL_ID = int(os.getenv("LUNETH_VALE_CHANNEL_ID", 0))
+WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
@@ -614,6 +615,7 @@ class QuestBoardView(discord.ui.View):
         custom_id="quest_board:view_profile"
     )
     async def view_profile(self, interaction: discord.Interaction, button):
+
         await interaction.response.defer(ephemeral=True)
 
         player = quest_manager.get_or_create_player(interaction.user.id)
@@ -624,6 +626,46 @@ class QuestBoardView(discord.ui.View):
         )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @discord.ui.button(
+        label="🔔 Wandering Alerts",
+        style=discord.ButtonStyle.secondary,
+        custom_id="quest_board:toggle_wandering_alerts",
+    )
+        
+    async def toggle_wandering_alerts(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "⚠️ This can only be used in a server.",
+                ephemeral=True,
+            )
+
+        role = interaction.guild.get_role(WANDERING_ALERT_ROLE_ID)
+        if not role:
+            return await interaction.response.send_message(
+                "⚠️ Alert role not configured.",
+                ephemeral=True,
+            )
+
+        member = interaction.user
+
+        if role in member.roles:
+            await member.remove_roles(role)
+            await interaction.response.send_message(
+                "🔕 Wandering threat alerts **disabled**.",
+                ephemeral=True,
+            )
+        else:
+            await member.add_roles(role)
+            await interaction.response.send_message(
+                "🔔 Wandering threat alerts **enabled**!",
+                ephemeral=True,
+            )
+
 
 def require_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.manage_guild

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import os
 import secrets
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -14,6 +15,7 @@ from systems.quests.quest_manager import QuestManager
 
 
 EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
+WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 
 DIFFICULTY_TABLE = {
     "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
@@ -151,7 +153,11 @@ class WanderingEventManager:
         self.active = event
 
         channel = bot.get_channel(self.luneth_channel_id) or await bot.fetch_channel(self.luneth_channel_id)
+        
+        ping = f"<@&{WANDERING_PING_ROLE_ID}>"
+
         msg = await channel.send(
+            content=f"⚠️ **A wandering threat has appeared!** {ping}",
             embed=self.build_event_embed(event),
             view=WanderingEventView(self, event.event_id),
         )
