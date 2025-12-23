@@ -16,11 +16,11 @@ from systems.quests.quest_manager import QuestManager
 EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
 
 DIFFICULTY_TABLE = {
-    "test":    {"minutes": 5, "required": 1,  "faction": 5, "global": 5, "player": 1},
-    "minor":    {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "player": 1},
-    "standard": {"minutes": 20, "required": 5,  "faction": 20, "global": 20, "player": 1},
-    "major":    {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "player": 1},
-    "critical": {"minutes": 30, "required": 12, "faction": 40, "global": 30, "player": 1},
+    "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
+    "minor":   {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "xp": 20},
+    "standard":{"minutes": 20, "required": 5,  "faction": 20, "global": 20, "xp": 30},
+    "major":   {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "xp": 40},
+    "critical":{"minutes": 30, "required": 12, "faction": 40, "global": 30, "xp": 50},
 }
 
 DIFFICULTY_SPAWN_WEIGHT = {
@@ -87,10 +87,13 @@ class WanderingEventManager:
                 name="Rewards",
                 value=(
                     f"🌍 Global Progress: **+{event.global_reward}**\n"
-                    f"⚡ Faction Power Progress:\n" + "\n".join(lines) + "\n"
+                    f"⚡ Faction Power Progress:\n"
+                    + "\n".join(lines) + "\n"
+                    f"🧠 All participants gained **{event.xp_reward} XP**"
                 ),
-                inline=False
+                inline=False,
             )
+
         else:
             embed.add_field(
                 name="Rewards",
@@ -142,7 +145,9 @@ class WanderingEventManager:
             required_participants=cfg["required"],
             faction_reward=cfg["faction"],
             global_reward=cfg["global"],
+            xp_reward=cfg["xp"],
         )
+
         self.active = event
 
         channel = bot.get_channel(self.luneth_channel_id) or await bot.fetch_channel(self.luneth_channel_id)
@@ -197,6 +202,7 @@ class WanderingEventManager:
             return
 
         success = len(event.participants) >= event.required_participants
+        xp = event.xp_reward
 
         # Award points only on success
         if success:
@@ -215,6 +221,7 @@ class WanderingEventManager:
                 p = self.quest_manager.get_player(uid)
                 p.monsters_season += 1
                 p.monsters_lifetime += 1
+                p.add_xp(xp)
 
             self.quest_manager.save_board()
             self.quest_manager.save_players()
