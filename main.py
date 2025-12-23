@@ -644,7 +644,7 @@ class QuestBoardView(discord.ui.View):
                 ephemeral=True,
             )
 
-        role = interaction.guild.get_role(WANDERING_ALERT_ROLE_ID)
+        role = interaction.guild.get_role(WANDERING_PING_ROLE_ID)
         if not role:
             return await interaction.response.send_message(
                 "⚠️ Alert role not configured.",
