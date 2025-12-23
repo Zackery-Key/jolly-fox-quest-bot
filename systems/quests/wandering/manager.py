@@ -4,22 +4,52 @@ import secrets
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
+import random
+from .monsters import WANDERING_MONSTERS
 import discord
-
 from .models import WanderingEvent
 from .views import WanderingEventView, WanderingEventResolvedView
 from .storage import save_active_event, load_active_event
+from systems.quests.quest_manager import QuestManager
 
+
+EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
 
 DIFFICULTY_TABLE = {
-    "test":    {"minutes": 5, "required": 1,  "faction": 10, "global": 10, "player": 5},
-    "minor":    {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "player": 5},
-    "standard": {"minutes": 20, "required": 5,  "faction": 20, "global": 20, "player": 5},
-    "major":    {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "player": 5},
-    "critical": {"minutes": 30, "required": 12, "faction": 40, "global": 30, "player": 5},
+    "test":    {"minutes": 5, "required": 1,  "faction": 5, "global": 5, "player": 1},
+    "minor":    {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "player": 1},
+    "standard": {"minutes": 20, "required": 5,  "faction": 20, "global": 20, "player": 1},
+    "major":    {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "player": 1},
+    "critical": {"minutes": 30, "required": 12, "faction": 40, "global": 30, "player": 1},
 }
 
+DIFFICULTY_SPAWN_WEIGHT = {
+    "minor": 50,
+    "standard": 25,
+    "major": 10,
+    "critical": 3,
+    "test": 100,
+}
+
+def pick_random_monster(self):
+    monsters = WANDERING_MONSTERS
+    weights = [m["weight"] for m in monsters]
+    return random.choices(monsters, weights=weights, k=1)[0]
+
+async def scheduled_spawn_loop(self, bot):
+    while True:
+        await asyncio.sleep(EVENT_INTERVAL)
+
+        if self.active and not self.active.resolved:
+            continue
+
+        monster = self.pick_random_monster()
+        await self.spawn(
+            bot=bot,
+            title=monster["title"],
+            description=monster["description"],
+            difficulty=monster["difficulty"],
+        )
 
 class WanderingEventManager:
     def __init__(self, quest_manager, luneth_channel_id: int):
@@ -78,7 +108,6 @@ class WanderingEventManager:
                 value=(
                     f"🌍 Global Progress: **+{event.global_reward}**\n"
                     f"⚡ Faction Power Progress:\n" + "\n".join(lines) + "\n"
-                    f"🏅 Player Contribution: **+{event.player_reward}** per participant"
                 ),
                 inline=False
             )
@@ -133,7 +162,6 @@ class WanderingEventManager:
             required_participants=cfg["required"],
             faction_reward=cfg["faction"],
             global_reward=cfg["global"],
-            player_reward=cfg["player"],
         )
         self.active = event
 
@@ -201,11 +229,12 @@ class WanderingEventManager:
                     self.quest_manager.quest_board.faction_points.get(fid, 0) + event.faction_reward
                 )
 
+
             # 🏅 player contribution per participant
             for uid in event.participants:
                 p = self.quest_manager.get_player(uid)
-                p.season_completed += event.player_reward
-                p.lifetime_completed += 1  # optional; remove if you don’t want this
+                p.monsters_season += 1
+                p.monsters_lifetime += 1
 
             self.quest_manager.save_board()
             self.quest_manager.save_players()

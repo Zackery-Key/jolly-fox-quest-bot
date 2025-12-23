@@ -239,10 +239,9 @@ class QuestManager:
         self.save_board()
     
     def get_scoreboard(self):
-        total_lifetime = sum(p.lifetime_completed for p in self.players.values())
-        total_season = sum(p.season_completed for p in self.players.values())
         return {
             "global_points": self.quest_board.global_points,
-            "lifetime_completed": total_lifetime,
-            "season_completed": total_season
+            "lifetime_completed": sum(p.lifetime_completed for p in self.players.values()),
+            "season_quest_completed": sum(p.season_completed for p in self.players.values()),
+            "season_monsters_completed": sum(p.monsters_season for p in self.players.values()),
         }

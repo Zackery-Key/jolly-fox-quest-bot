@@ -87,8 +87,8 @@ def build_board_embed():
     board = quest_manager.quest_board
 
     global_points = stats["global_points"]
-    lifetime_completed = stats["lifetime_completed"]
-    season_completed = stats["season_completed"]
+    season_completed = stats["season_quest_completed"]
+    monsters_completed = stats["Season_monsters_completed"]
 
     # Use board.season_goal but default to 100 if something weird
     season_goal = board.season_goal if getattr(board, "season_goal", 0) > 0 else 100
@@ -168,6 +168,12 @@ def build_board_embed():
         inline=False,
     )
 
+    embed.add_field(
+        name="🐲 Wandering Threats Cleared",
+        value=str(monsters_completed),
+        inline=False,
+    )
+    
     embed.set_footer(
         text="You get one quest a day and they reset at 00:00 UTC"
     )
@@ -1569,6 +1575,7 @@ async def quest_admin_reset_board(interaction: discord.Interaction):
     # 🔄 RESET PLAYER SEASONAL STATS
     for player in quest_manager.players.values():
         player.season_completed = 0
+        player.monsters_season = 0
 
     quest_manager.save_players()
     quest_manager.save_board()
@@ -2020,6 +2027,10 @@ async def on_ready():
     # Sync commands (you already do this)
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
     await wandering_manager.startup_resume(bot)
+
+    bot.loop.create_task(
+        wandering_manager.scheduled_spawn_loop(bot)
+    )
 
     # 🔹 AUTO refresh quest board
     try:

@@ -13,6 +13,8 @@ class PlayerState:
     faction_id: str | None = None
     lifetime_completed: int = 0
     season_completed: int = 0
+    monsters_season: int = 0
+    monsters_lifetime: int = 0
     xp: int = 0
     level: int = 1
     badges: set[str] = field(default_factory=set)
@@ -72,6 +74,8 @@ class PlayerState:
             "faction_id": self.faction_id,
             "lifetime_completed": self.lifetime_completed,
             "season_completed": self.season_completed,
+            "monsters_season": self.monsters_season,
+            "monsters_lifetime": self.monsters_lifetime,
             "xp": self.xp,
             "level": self.level,
             "badges": list(self.badges),
@@ -92,6 +96,8 @@ class PlayerState:
             faction_id=data.get("faction_id"),
             lifetime_completed=data.get("lifetime_completed", 0),
             season_completed=data.get("season_completed", 0),
+            monsters_season=data.get("monsters_season", 0),
+            monsters_lifetime=data.get("monsters_lifetime", 0),
             xp=data.get("xp", 0),
             level=data.get("level", 1),
             badges=set(data.get("badges", [])),
