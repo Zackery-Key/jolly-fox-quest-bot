@@ -12,10 +12,13 @@ from .models import WanderingEvent
 from .views import WanderingEventView, WanderingEventResolvedView
 from .storage import save_active_event, load_active_event
 from systems.quests.quest_manager import QuestManager
+from datetime import datetime, timedelta, timezone
 
 
 EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
 WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
+SPAWN_HOURS = [0, 4, 8, 12, 16, 20]
+PING_DIFFICULTIES = {"major", "critical"}
 
 DIFFICULTY_TABLE = {
     "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
@@ -32,6 +35,42 @@ DIFFICULTY_SPAWN_WEIGHT = {
     "critical": 3,
     "test": 100,
 }
+
+def seconds_until_next_spawn(spawn_hours: list[int]) -> float:
+        now = datetime.now(timezone.utc)
+        today = now.date()
+
+        candidates = []
+
+        for hour in spawn_hours:
+            candidate = datetime(
+                year=today.year,
+                month=today.month,
+                day=today.day,
+                hour=hour,
+                minute=0,
+                second=0,
+                tzinfo=timezone.utc,
+            )
+            if candidate > now:
+                candidates.append(candidate)
+
+        # If no times left today, take first spawn tomorrow
+        if not candidates:
+            first_hour = min(spawn_hours)
+            candidate = datetime(
+                year=today.year,
+                month=today.month,
+                day=today.day,
+                hour=first_hour,
+                minute=0,
+                second=0,
+                tzinfo=timezone.utc,
+            ) + timedelta(days=1)
+            candidates.append(candidate)
+
+        next_spawn = min(candidates)
+        return (next_spawn - now).total_seconds()
 
 class WanderingEventManager:
     def __init__(self, quest_manager, luneth_channel_id: int):
@@ -154,10 +193,23 @@ class WanderingEventManager:
 
         channel = bot.get_channel(self.luneth_channel_id) or await bot.fetch_channel(self.luneth_channel_id)
         
-        ping = f"<@&{WANDERING_PING_ROLE_ID}>"
+        PING_DIFFICULTIES = {"major", "critical"}
+
+        DIFFICULTY_ALERT_TEXT = {
+            "major": "☠️ **Major wandering threat detected!**",
+            "critical": "💀 **CRITICAL THREAT — ALL HANDS!**",
+        }
+
+        content = DIFFICULTY_ALERT_TEXT.get(
+            difficulty,
+            "🐲 **A wandering threat has appeared!**"
+        )
+
+        if difficulty in PING_DIFFICULTIES:
+            content += f" <@&{WANDERING_PING_ROLE_ID}>"
 
         msg = await channel.send(
-            content=f"⚠️ **A wandering threat has appeared!** {ping}",
+            content=content,
             embed=self.build_event_embed(event),
             view=WanderingEventView(self, event.event_id),
         )
@@ -310,8 +362,10 @@ class WanderingEventManager:
 
     async def scheduled_spawn_loop(self, bot):
         while True:
-            await asyncio.sleep(EVENT_INTERVAL)
+            delay = seconds_until_next_spawn(SPAWN_HOURS)
+            await asyncio.sleep(delay)
 
+            # Don’t stack events
             if self.active and not self.active.resolved:
                 continue
 
@@ -322,3 +376,4 @@ class WanderingEventManager:
                 description=monster["description"],
                 difficulty=monster["difficulty"],
             )
+

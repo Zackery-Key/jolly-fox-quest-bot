@@ -285,6 +285,15 @@ def build_profile_embed(
     )
 
     embed.add_field(
+        name="🐲 Wandering Threats Cleared",
+        value=(
+            f"**Seasonal Completed:** {player.monsters_season}\n"
+            f"**Lifetime Completed:** {player.monsters_lifetime}"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
         name="🎯 Daily Quest",
         value=dq_text,
         inline=False,
