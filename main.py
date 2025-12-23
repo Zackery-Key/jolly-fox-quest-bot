@@ -24,24 +24,29 @@ from systems.seasonal.storage import load_season, save_season
 from systems.badges.definitions import BADGES
 from systems.quests.quest_manager import evaluate_join_date_badges
 from discord import app_commands
-
+from systems.quests.wandering import WanderingEventManager
 
 
 # ========= Constants / IDs =========
 
+# Env
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID", 0))
 POINTS_LOG_CHANNEL_ID = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
 BADGE_ANNOUNCE_CHANNEL_ID = int(os.getenv("BADGE_ANNOUNCE_CHANNEL_ID", 0))
 GRIMBALD_ROLE_ID = int(os.getenv("GRIMBALD_ROLE_ID"))
 TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
+LUNETH_VALE_CHANNEL_ID = int(os.getenv("LUNETH_VALE_CHANNEL_ID", 0))
 QUEST_POINTS = 5
 
 # Quest Manager
 quest_manager = QuestManager()
 print("QUEST MANAGER INITIALIZED")
 
-# Env
-TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = int(os.getenv("GUILD_ID", 0))
+wandering_manager = WanderingEventManager(
+    quest_manager=quest_manager,
+    luneth_channel_id=LUNETH_VALE_CHANNEL_ID,
+)
 
 if not TOKEN or not GUILD_ID:
     raise ValueError("Missing DISCORD_TOKEN or GUILD_ID environment variable.")
@@ -120,6 +125,15 @@ def build_board_embed():
         inline=False,
     )
 
+    embed.add_field(
+        name="⚡ Faction Power Progress",
+        value=(
+            "Each faction advances independently.\n"
+            "Reaching the goal unlocks a **one-time faction power** for the final boss."
+        ),
+        inline=False,
+    )
+
     # Faction standings
     faction_points = board.faction_points or {}
 
@@ -128,9 +142,13 @@ def build_board_embed():
     for faction_id, fac in FACTIONS.items():
         pts = faction_points.get(faction_id, 0)
         bar = make_progress_bar(pts, faction_goal)
+
+        unlocked = pts >= faction_goal
+        status = " ⚡ **UNLOCKED**" if unlocked else ""
+
         embed.add_field(
             name=f"{fac.emoji} {fac.name}",
-            value=f"{pts} / {faction_goal} pts\n{bar}",
+            value=f"{pts} / {faction_goal} pts{status}\n{bar}",
             inline=False,
         )
 
@@ -150,7 +168,7 @@ def build_board_embed():
     )
 
     embed.set_footer(
-        text="Every completed quest pushes the Jolly Fox further this season."
+        text="You get one quest a day and they reset at 00:00 UTC"
     )
 
     return embed
@@ -836,9 +854,10 @@ def strip_grimbald_mention(message: discord.Message) -> str:
 
     return content.strip()
 
+wandering_manager.refresh_board_callback = refresh_quest_board
 
 
-# ========= ADMIN: Seasonal =========
+# ========= ADMIN: Seasonal and Events =========
 
 @bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
 @app_commands.default_permissions(manage_guild=True)
@@ -944,6 +963,27 @@ async def season_boss_set(
         "✅ Boss updated successfully.",
         ephemeral=True,
     )
+
+from typing import Literal
+
+@bot.tree.command(name="quest_admin_spawn_event", description="Admin: Spawn a wandering event in Luneth Vale.")
+@app_commands.default_permissions(manage_guild=True)
+async def quest_admin_spawn_event(
+    interaction: discord.Interaction,
+    difficulty: Literal["minor", "standard", "major", "critical"],
+    title: str,
+    description: str,
+):
+    try:
+        await wandering_manager.spawn(
+            bot=interaction.client,
+            title=title,
+            description=description,
+            difficulty=difficulty,
+        )
+        await interaction.response.send_message("✅ Wandering event spawned.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"⚠️ Could not spawn event: {e}", ephemeral=True)
 
 
 
@@ -1980,6 +2020,7 @@ async def on_ready():
 
     # Sync commands (you already do this)
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+    await wandering_manager.startup_resume(bot)
 
     # 🔹 AUTO refresh quest board
     try:
