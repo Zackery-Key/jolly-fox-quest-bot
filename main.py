@@ -970,7 +970,7 @@ from typing import Literal
 @app_commands.default_permissions(manage_guild=True)
 async def quest_admin_spawn_event(
     interaction: discord.Interaction,
-    difficulty: Literal["minor", "standard", "major", "critical"],
+    difficulty: Literal["test", "minor", "standard", "major", "critical"],
     title: str,
     description: str,
 ):
