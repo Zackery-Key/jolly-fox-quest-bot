@@ -32,7 +32,6 @@ DIFFICULTY_SPAWN_WEIGHT = {
     "standard": 25,
     "major": 10,
     "critical": 3,
-    "test": 100,
 }
 
 def seconds_until_next_spawn(spawn_hours: list[int]) -> float:
@@ -289,9 +288,11 @@ class WanderingEventManager:
         save_active_event(None)
 
     # ---------- Internals ----------
-    def _schedule_resolution(self, bot: discord.Client):
+    # Only cancel if we're explicitly replacing the active event
         if self._resolve_task and not self._resolve_task.done():
             self._resolve_task.cancel()
+
+        self._resolve_task = None
 
         async def _runner():
             assert self.active is not None
@@ -342,13 +343,27 @@ class WanderingEventManager:
         asyncio.create_task(_deleter())
 
     def pick_random_monster(self):
-        monsters = [
+        # 1️⃣ Pick difficulty first (excluding test)
+        difficulties = list(DIFFICULTY_SPAWN_WEIGHT.keys())
+        weights = list(DIFFICULTY_SPAWN_WEIGHT.values())
+
+        difficulty = random.choices(
+            difficulties,
+            weights=weights,
+            k=1,
+        )[0]
+
+        # 2️⃣ Pick any monster of that difficulty
+        candidates = [
             m for m in WANDERING_MONSTERS
-            if m["difficulty"] != "test"
+            if m["difficulty"] == difficulty
         ]
 
-        weights = [m["weight"] for m in monsters]
-        return random.choices(monsters, weights=weights, k=1)[0]
+        if not candidates:
+            raise RuntimeError(f"No monsters defined for difficulty '{difficulty}'")
+
+        return random.choice(candidates)
+
 
     async def scheduled_spawn_loop(self, bot):
         while True:
