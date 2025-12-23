@@ -70,6 +70,11 @@ def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     empty = length - filled
     return f"[{'█' * filled}{'░' * empty}]"
 
+def get_crown_holder(faction_points: dict[str, int]) -> str | None:
+    if not faction_points:
+        return None
+    return max(faction_points.items(), key=lambda x: x[1])[0]
+
 def build_board_embed():
     """Build the quest board embed including faction standings."""
     stats = quest_manager.get_scoreboard()
@@ -117,39 +122,31 @@ def build_board_embed():
 
     # Faction standings
     faction_points = board.faction_points or {}
-    faction_lines: list[str] = []
 
-    max_pts = max(faction_points.values()) if faction_points else 0
-    leaders = {
-        fid
-        for fid, pts in faction_points.items()
-        if pts == max_pts and max_pts > 0
-    }
+    faction_goal = board.faction_goal if getattr(board, "faction_goal", 0) > 0 else 250
 
     for faction_id, fac in FACTIONS.items():
         pts = faction_points.get(faction_id, 0)
-        crown = " 👑" if faction_id in leaders else ""
-        faction_lines.append(f"{fac.emoji} **{fac.name}** — {pts} pts{crown}")
+        bar = make_progress_bar(pts, faction_goal)
+        embed.add_field(
+            name=f"{fac.emoji} {fac.name}",
+            value=f"{pts} / {faction_goal} pts\n{bar}",
+            inline=False,
+        )
 
-    if not faction_lines:
-        faction_lines.append("No faction points yet. Get questing!")
-
-    embed.add_field(
-        name="⚔️ Faction Standings",
-        value="\n".join(faction_lines),
-        inline=False,
-    )
+    crown_holder = get_crown_holder(faction_points)
+    if crown_holder:
+        embed.add_field(
+            name="👑 Crown Holder",
+            value=FACTIONS[crown_holder].name,
+            inline=False,
+        )
 
     # Quest counts
     embed.add_field(
         name="🏆 Quests Completed This Season",
         value=str(season_completed),
-        inline=True,
-    )
-    embed.add_field(
-        name="🌟 Lifetime Quests Completed (All Players)",
-        value=str(lifetime_completed),
-        inline=True,
+        inline=False,
     )
 
     embed.set_footer(
@@ -1424,6 +1421,7 @@ async def quest_admin_set_season(
     interaction: discord.Interaction,
     season_id: str,
     season_goal: int,
+    faction_goal: int,
     season_reward: str | None = None,
 ):
     if not require_admin(interaction):
@@ -1432,6 +1430,7 @@ async def quest_admin_set_season(
     board = quest_manager.quest_board
     board.reset_season(season_id)
     board.season_goal = max(1, season_goal)
+    board.faction_goal = max(1, faction_goal)
     board.season_reward = season_reward or ""
 
     quest_manager.save_board()
@@ -1442,7 +1441,8 @@ async def quest_admin_set_season(
         (
             f"📅 **Season Started / Reset**\n"
             f"• Season ID: **{season_id}**\n"
-            f"• Goal: **{board.season_goal}** points\n"
+            f"• Guild Goal: **{board.season_goal}** points\n"
+            f"• Faction Power Goal: **{board.faction_goal}** points\n"
             f"• Reward: {board.season_reward or 'None'}\n"
             f"• By: {interaction.user.mention}"
         )
@@ -1459,12 +1459,13 @@ async def quest_admin_set_season(
 async def quest_admin_set_board_meta(
     interaction: discord.Interaction,
     season_goal: int | None = None,
+    faction_goal: int | None = None,
     season_reward: str | None = None,
 ):
     if not require_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
 
-    if season_goal is None and season_reward is None:
+    if season_goal is None and faction_goal is None and season_reward is None:
         await interaction.response.send_message(
             "⚠️ You must provide at least one of `season_goal` or `season_reward`.",
             ephemeral=True,
@@ -1477,6 +1478,8 @@ async def quest_admin_set_board_meta(
         board.season_goal = max(1, season_goal)
     if season_reward is not None:
         board.season_reward = season_reward
+    if faction_goal is not None:
+        board.faction_goal = max(1, faction_goal)
 
     quest_manager.save_board()
     await refresh_quest_board(interaction.client)
@@ -1488,6 +1491,9 @@ async def quest_admin_set_board_meta(
 
     if season_reward is not None:
         log_lines.append(f"• New Reward: {board.season_reward}")
+    
+    if faction_goal is not None:
+        log_lines.append(f"• New Faction Power Goal: **{board.faction_goal}** points")
 
     log_lines.append(f"• By: {interaction.user.mention}")
 

@@ -17,6 +17,7 @@ class QuestBoard:
 
     # NEW – seasonal metadata
     season_goal: int = 100
+    faction_goal: int = 250
     season_reward: str = ""  # e.g. "Custom role + art + one-shot seat"
 
     # Where the quest board embed is posted (for refresh)

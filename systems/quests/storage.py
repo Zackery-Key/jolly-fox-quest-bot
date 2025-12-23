@@ -94,6 +94,7 @@ def load_board() -> QuestBoard:
 
     # NEW
     board.season_goal = raw.get("season_goal", 100)
+    board.faction_goal = raw.get("faction_goal", 250)
     board.season_reward = raw.get("season_reward", "")
 
     return board
@@ -105,6 +106,7 @@ def save_board(board: QuestBoard) -> None:
         "season_id": board.season_id,
         "global_points": board.global_points,
         "faction_points": board.faction_points,
+        "faction_goal": board.faction_goal,
         "display_channel_id": board.display_channel_id,
         "message_id": board.message_id,
         # NEW
