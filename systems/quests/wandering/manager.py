@@ -444,6 +444,16 @@ class WanderingEventManager:
                 description=monster["description"],
                 difficulty=monster["difficulty"],
             )
+            
+            next_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+
+            await self.log_to_points(
+                bot,
+                f"⏳ **Next Wandering Spawn Scheduled**\n"
+                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
+                f"• In **{int(delay // 60)} minutes**"
+            )
+
 
             next_delay = seconds_until_next_spawn(SPAWN_HOURS)
             next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
