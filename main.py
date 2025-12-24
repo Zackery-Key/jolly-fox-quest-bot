@@ -26,6 +26,7 @@ from systems.quests.quest_manager import evaluate_join_date_badges
 from discord import app_commands
 from systems.quests.wandering import WanderingEventManager
 from typing import Literal
+from datetime import datetime, timedelta, timezone
 
 
 # ========= Constants / IDs =========

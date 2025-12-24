@@ -50,7 +50,9 @@ def seconds_until_next_spawn(spawn_hours: list[int]) -> float:
                 second=0,
                 tzinfo=timezone.utc,
             )
-            if candidate > now:
+            GRACE_SECONDS = 60  # allow 1 minute late
+
+            if candidate + timedelta(seconds=GRACE_SECONDS) > now:
                 candidates.append(candidate)
 
         # If no times left today, take first spawn tomorrow
@@ -145,10 +147,23 @@ class WanderingEventManager:
 
     # ---------- Public API ----------
     async def startup_resume(self, bot: discord.Client):
-        """Call on bot ready. Restores active event and re-schedules resolution."""
         self.active = load_active_event()
+
+        # 🔔 LOG NEXT SPAWN ON BOOT (always)
+        next_spawn = self.get_next_spawn_time()
+
+        await self.log_to_points(
+            bot,
+            (
+                "🧭 **Wandering System Online**\n"
+                "• Scheduler initialized\n"
+                f"• Next wandering threat: <t:{int(next_spawn.timestamp())}:F>"
+            )
+        )
+
         if not self.active:
             return
+
 
         # If it already ended while bot was down, resolve immediately
         if datetime.now(timezone.utc) >= self.active.ends_at and not self.active.resolved:
@@ -203,6 +218,17 @@ class WanderingEventManager:
         save_active_event(event)
 
         self._schedule_resolution(bot)
+
+        await self.log_to_points(
+            bot,
+            (
+                "🐲 **Wandering Threat Spawned**\n"
+                f"• **{event.title}**\n"
+                f"• Difficulty: **{event.difficulty.title()}**\n"
+                f"• Duration: **{event.duration_minutes} minutes**\n"
+                f"• Required Hunters: **{event.required_participants}**"
+            )
+        )
 
     async def handle_participation(self, interaction: discord.Interaction, event_id: str):
         event = self.active
@@ -272,6 +298,30 @@ class WanderingEventManager:
             # 🔄 Refresh the quest board embed
         if self.refresh_board_callback:
             await self.refresh_board_callback(bot)
+
+        if success:
+            await self.log_to_points(
+                bot,
+                (
+                    "✅ **Wandering Threat Cleared**\n"
+                    f"• **{event.title}**\n"
+                    f"• Participants: **{len(event.participants)}**\n"
+                    f"• Global Progress: **+{event.global_reward}**\n"
+                    f"• Faction Progress: **+{event.faction_reward}** "
+                    f"({', '.join(event.participating_factions) or 'None'})\n"
+                    f"• XP per Player: **{event.xp_reward}**"
+                )
+            )
+        else:
+            await self.log_to_points(
+                bot,
+                (
+                    "❌ **Wandering Threat Failed**\n"
+                    f"• **{event.title}**\n"
+                    f"• Participants: **{len(event.participants)} / {event.required_participants}**\n"
+                    "• No progress or XP awarded"
+                )
+            )
 
 
         # Edit the event message to result state
@@ -367,6 +417,16 @@ class WanderingEventManager:
 
         return random.choice(candidates)
 
+    async def log_to_points(self, bot: discord.Client, content: str):
+        channel_id = int(os.getenv("POINTS_LOG_CHANNEL_ID", 0))
+        if not channel_id:
+            return
+
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return
+
+        await channel.send(content)
 
     async def scheduled_spawn_loop(self, bot):
         while True:
@@ -384,4 +444,19 @@ class WanderingEventManager:
                 description=monster["description"],
                 difficulty=monster["difficulty"],
             )
+
+            next_delay = seconds_until_next_spawn(SPAWN_HOURS)
+            next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
+
+            await self.log_to_points(
+                bot,
+                f"⏳ **Next Wandering Spawn Scheduled**\n"
+                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
+                f"• In **{int(delay // 60)} minutes**"
+            )
+
+    def get_next_spawn_time(self) -> datetime:
+        delay = seconds_until_next_spawn(SPAWN_HOURS)
+        return datetime.now(timezone.utc) + timedelta(seconds=delay)
+
 
