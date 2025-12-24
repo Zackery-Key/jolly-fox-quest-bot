@@ -76,7 +76,7 @@ class WanderingEventManager:
     def __init__(self, quest_manager, luneth_channel_id: int):
         self.quest_manager = quest_manager
         self.luneth_channel_id = luneth_channel_id
-
+        self._startup_logged = False
         self.active: Optional[WanderingEvent] = None
         self._resolve_task: Optional[asyncio.Task] = None
 
@@ -149,20 +149,32 @@ class WanderingEventManager:
     async def startup_resume(self, bot: discord.Client):
         self.active = load_active_event()
 
-        # 🔔 LOG NEXT SPAWN ON BOOT (always)
-        next_spawn = self.get_next_spawn_time()
+        # 🔥 HARD GUARD: clear expired or invalid events
+        if self.active and datetime.now(timezone.utc) >= self.active.ends_at:
+            self.active = None
+            save_active_event(None)
 
-        await self.log_to_points(
-            bot,
-            (
-                "🧭 **Wandering System Online**\n"
-                "• Scheduler initialized\n"
-                f"• Next wandering threat: <t:{int(next_spawn.timestamp())}:F>"
+        # 🔔 LOG NEXT SPAWN ON BOOT (once per process)
+        if not self._startup_logged:
+            self._startup_logged = True
+
+            # small delay helps prod channel cache
+            await asyncio.sleep(5)
+
+            next_spawn = self.get_next_spawn_time()
+
+            await self.log_to_points(
+                bot,
+                (
+                    "🧭 **Wandering System Online**\n"
+                    "• Scheduler initialized\n"
+                    f"• Next wandering threat: <t:{int(next_spawn.timestamp())}:F>"
+                )
             )
-        )
 
         if not self.active:
             return
+
 
 
         # If it already ended while bot was down, resolve immediately
@@ -444,6 +456,16 @@ class WanderingEventManager:
                 description=monster["description"],
                 difficulty=monster["difficulty"],
             )
+            
+            next_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+
+            await self.log_to_points(
+                bot,
+                f"⏳ **Next Wandering Spawn Scheduled**\n"
+                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
+                f"• In **{int(delay // 60)} minutes**"
+            )
+
 
             next_delay = seconds_until_next_spawn(SPAWN_HOURS)
             next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
