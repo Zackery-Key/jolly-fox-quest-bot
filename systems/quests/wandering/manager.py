@@ -21,10 +21,10 @@ SPAWN_HOURS = [0, 4, 8, 12, 16, 20]
 
 DIFFICULTY_TABLE = {
     "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
-    "minor":   {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "xp": 20},
-    "standard":{"minutes": 20, "required": 5,  "faction": 20, "global": 20, "xp": 30},
-    "major":   {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "xp": 40},
-    "critical":{"minutes": 30, "required": 12, "faction": 40, "global": 30, "xp": 50},
+    "minor":   {"minutes": 15, "required": 1,  "faction": 10, "global": 10, "xp": 20},
+    "standard":{"minutes": 20, "required": 3,  "faction": 20, "global": 20, "xp": 30},
+    "major":   {"minutes": 30, "required": 5,  "faction": 30, "global": 25, "xp": 40},
+    "critical":{"minutes": 30, "required": 8, "faction": 40, "global": 30, "xp": 50},
 }
 
 DIFFICULTY_SPAWN_WEIGHT = {
@@ -149,20 +149,23 @@ class WanderingEventManager:
     async def startup_resume(self, bot: discord.Client):
         self.active = load_active_event()
 
-        # 🔥 HARD GUARD: clear expired or invalid events
-        if self.active and datetime.now(timezone.utc) >= self.active.ends_at:
-            self.active = None
-            save_active_event(None)
+        # 🔥 Auto-clear invalid or expired events
+        if self.active:
+            if (
+                self.active.ends_at is None
+                or datetime.now(timezone.utc) >= self.active.ends_at
+            ):
+                print("[WANDERING] Clearing stale active event on startup")
+                self.active = None
+                save_active_event(None)
 
-        # 🔔 LOG NEXT SPAWN ON BOOT (once per process)
-        if not self._startup_logged:
+        # 🔔 Log system state (once per process)
+        if not getattr(self, "_startup_logged", False):
             self._startup_logged = True
 
-            # small delay helps prod channel cache
-            await asyncio.sleep(5)
+            await asyncio.sleep(5)  # allow Discord cache
 
             next_spawn = self.get_next_spawn_time()
-
             await self.log_to_points(
                 bot,
                 (
@@ -172,21 +175,11 @@ class WanderingEventManager:
                 )
             )
 
-        if not self.active:
-            return
+        # Resume unresolved but valid events
+        if self.active and not self.active.resolved:
+            self._schedule_resolution(bot)
+            await self._refresh_active_message(bot)
 
-
-
-        # If it already ended while bot was down, resolve immediately
-        if datetime.now(timezone.utc) >= self.active.ends_at and not self.active.resolved:
-            await self.resolve_active(bot)
-            return
-
-        # Otherwise schedule
-        self._schedule_resolution(bot)
-
-        # Also try to refresh the message view/embed (optional)
-        await self._refresh_active_message(bot)
 
     async def spawn(self, bot: discord.Client, title: str, description: str, difficulty: str):
         if difficulty not in DIFFICULTY_TABLE:
@@ -435,20 +428,32 @@ class WanderingEventManager:
             return
 
         channel = bot.get_channel(channel_id)
-        if not channel:
-            return
+        if channel is None:
+            try:
+                channel = await bot.fetch_channel(channel_id)
+            except Exception:
+                return
 
         await channel.send(content)
 
+
     async def scheduled_spawn_loop(self, bot):
         while True:
+            # 🔥 Self-heal: clear expired events
+            if self.active and datetime.now(timezone.utc) >= self.active.ends_at:
+                print("[WANDERING] Auto-clearing expired event in loop")
+                self.active = None
+                save_active_event(None)
+
+            # ⏳ Wait until next spawn window
             delay = seconds_until_next_spawn(SPAWN_HOURS)
             await asyncio.sleep(delay)
 
-            # Don’t stack events
+            # 🛑 Don’t stack events
             if self.active and not self.active.resolved:
                 continue
 
+            # 🐲 Spawn monster
             monster = self.pick_random_monster()
             await self.spawn(
                 bot=bot,
@@ -456,25 +461,18 @@ class WanderingEventManager:
                 description=monster["description"],
                 difficulty=monster["difficulty"],
             )
-            
-            next_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
 
-            await self.log_to_points(
-                bot,
-                f"⏳ **Next Wandering Spawn Scheduled**\n"
-                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
-                f"• In **{int(delay // 60)} minutes**"
-            )
-
-
+            # 📅 Log NEXT spawn (after spawning)
             next_delay = seconds_until_next_spawn(SPAWN_HOURS)
             next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
 
             await self.log_to_points(
                 bot,
-                f"⏳ **Next Wandering Spawn Scheduled**\n"
-                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
-                f"• In **{int(delay // 60)} minutes**"
+                (
+                    "⏳ **Next Wandering Spawn Scheduled**\n"
+                    f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
+                    f"• In **{int(next_delay // 60)} minutes**"
+                )
             )
 
     def get_next_spawn_time(self) -> datetime:
