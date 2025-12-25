@@ -38,31 +38,40 @@ def _str_to_dt(s: str) -> datetime:
 # -------------------------------------------------
 # Load / Save
 # -------------------------------------------------
-def load_active_event() -> Optional[WanderingEvent]:
-    _ensure_file_exists()
-
-    with open(WANDERING_FILE, "r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    active = raw.get("active")
-    if not active:
+def load_active_event():
+    if not os.path.exists(WANDERING_FILE):
         return None
 
-    return WanderingEvent(
-        event_id=active["event_id"],
-        channel_id=active["channel_id"],
-        message_id=active.get("message_id"),
-        ends_at=_str_to_dt(active["ends_at"]),
-        title=active["title"],
-        description=active["description"],
-        difficulty=active["difficulty"],
-        required_participants=active["required_participants"],
-        faction_reward=active["faction_reward"],
-        global_reward=active["global_reward"],
-        participants=set(active.get("participants", [])),
-        participating_factions=set(active.get("participating_factions", [])),
-        resolved=active.get("resolved", False),
-    )
+    try:
+        with open(WANDERING_FILE, "r") as f:
+            data = json.load(f)
+
+        # ⛑️ Normalize old / partial schemas
+        return WanderingEvent(
+            event_id=data.get("event_id"),
+            channel_id=data.get("channel_id"),
+            message_id=data.get("message_id"),
+            duration_minutes=data.get("duration_minutes", 0),
+            ends_at=datetime.fromisoformat(data["ends_at"]),
+            title=data.get("title", "Unknown Threat"),
+            description=data.get("description", ""),
+            difficulty=data.get("difficulty", "minor"),
+            required_participants=data.get("required_participants", 1),
+            faction_reward=data.get("faction_reward", 0),
+            global_reward=data.get("global_reward", 0),
+            xp_reward=data.get("xp_reward", 0),
+            participants=set(data.get("participants", [])),
+            participating_factions=set(data.get("participating_factions", [])),
+            resolved=data.get("resolved", False),
+        )
+
+    except Exception as e:
+        # 🚨 Corrupt or incompatible save → self-heal
+        print(f"[WANDERING] Failed to load active event, clearing: {e}")
+        save_active_event(None)
+        return None
+
+
 
 
 def save_active_event(event: Optional[WanderingEvent]) -> None:
