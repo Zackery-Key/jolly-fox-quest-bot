@@ -142,7 +142,12 @@ class WanderingEventManager:
                 inline=False
             )
 
-        embed.set_footer(text="This event will be cleared shortly.")
+        footer = (
+            "The threat has been defeated and recorded."
+            if success
+            else "This failed event will be cleared shortly."
+        )
+        embed.set_footer(text=footer)
         return embed
 
     # ---------- Public API ----------
@@ -336,7 +341,8 @@ class WanderingEventManager:
         save_active_event(event)
 
         # Auto-delete after 10 minutes
-        await self._schedule_delete(bot, delay_seconds=600)
+        if not success:
+            await self._schedule_delete(bot, delay_seconds=600)
 
         # Clear active
         self.active = None
