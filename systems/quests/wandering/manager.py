@@ -82,22 +82,22 @@ class WanderingEventManager:
 
         self.refresh_board_callback = None
 
-        async def announce_next_spawn(self, bot, next_time: datetime):
-            channel = bot.get_channel(self.luneth_channel_id)
-            if channel is None:
-                try:
-                    channel = await bot.fetch_channel(self.luneth_channel_id)
-                except Exception:
-                    return
+    async def announce_next_spawn(self, bot, next_time: datetime):
+        channel = bot.get_channel(self.luneth_channel_id)
+        if channel is None:
+            try:
+                channel = await bot.fetch_channel(self.luneth_channel_id)
+            except Exception:
+                return
 
-            await channel.send(
-                (
-                    "🌫️ **The Vale grows restless…**\n"
-                    "A new wandering threat is expected.\n\n"
-                    f"🕰️ **Next Spawn:** <t:{int(next_time.timestamp())}:F>\n"
-                    f"⏳ *(In {int((next_time - datetime.now(timezone.utc)).total_seconds() // 60)} minutes)*"
-                )
+        await channel.send(
+            (
+                "🌫️ **The Vale grows restless…**\n"
+                "A new wandering threat is expected.\n\n"
+                f"🕰️ **Next Spawn:** <t:{int(next_time.timestamp())}:F>\n"
+                f"⏳ *(In {int((next_time - datetime.now(timezone.utc)).total_seconds() // 60)} minutes)*"
             )
+        )
 
 
     # ---------- Embeds ----------
@@ -366,6 +366,9 @@ class WanderingEventManager:
         self.active = None
         save_active_event(None)
 
+        next_time = self.get_next_spawn_time()
+        await self.announce_next_spawn(bot, next_time)
+
     # ---------- Internals ----------
     # Only cancel if we're explicitly replacing the active event
     def _schedule_resolution(self, bot: discord.Client):
@@ -489,9 +492,6 @@ class WanderingEventManager:
             # 📅 Log NEXT spawn (after spawning)
             next_delay = seconds_until_next_spawn(SPAWN_HOURS)
             next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
-
-            # 📣 Announce to Luneth Vale
-            await self.announce_next_spawn(bot, next_time)
 
             await self.log_to_points(
                 bot,
