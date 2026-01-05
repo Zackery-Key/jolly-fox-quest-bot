@@ -369,6 +369,19 @@ class WanderingEventManager:
         next_time = self.get_next_spawn_time()
         await self.announce_next_spawn(bot, next_time)
 
+        # 📅 Log NEXT spawn (after spawning)
+        next_delay = seconds_until_next_spawn(SPAWN_HOURS)
+        next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
+
+        await self.log_to_points(
+            bot,
+            (
+                "⏳ **Next Wandering Spawn Scheduled**\n"
+                f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
+                f"• In **{int(next_delay // 60)} minutes**"
+            )
+        )
+
     # ---------- Internals ----------
     # Only cancel if we're explicitly replacing the active event
     def _schedule_resolution(self, bot: discord.Client):
@@ -487,19 +500,6 @@ class WanderingEventManager:
                 title=monster["title"],
                 description=monster["description"],
                 difficulty=monster["difficulty"],
-            )
-
-            # 📅 Log NEXT spawn (after spawning)
-            next_delay = seconds_until_next_spawn(SPAWN_HOURS)
-            next_time = datetime.now(timezone.utc) + timedelta(seconds=next_delay)
-
-            await self.log_to_points(
-                bot,
-                (
-                    "⏳ **Next Wandering Spawn Scheduled**\n"
-                    f"• UTC: <t:{int(next_time.timestamp())}:F>\n"
-                    f"• In **{int(next_delay // 60)} minutes**"
-                )
             )
 
     def get_next_spawn_time(self) -> datetime:
