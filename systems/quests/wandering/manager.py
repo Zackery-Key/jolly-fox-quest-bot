@@ -82,22 +82,22 @@ class WanderingEventManager:
 
         self.refresh_board_callback = None
 
-        async def announce_next_spawn(self, bot, next_time: datetime):
-            channel = bot.get_channel(self.luneth_channel_id)
-            if channel is None:
-                try:
-                    channel = await bot.fetch_channel(self.luneth_channel_id)
-                except Exception:
-                    return
+    async def announce_next_spawn(self, bot, next_time: datetime):
+        channel = bot.get_channel(self.luneth_channel_id)
+        if channel is None:
+            try:
+                channel = await bot.fetch_channel(self.luneth_channel_id)
+            except Exception:
+                return
 
-            await channel.send(
-                (
-                    "🌫️ **The Vale grows restless…**\n"
-                    "A new wandering threat is expected.\n\n"
-                    f"🕰️ **Next Spawn:** <t:{int(next_time.timestamp())}:F>\n"
-                    f"⏳ *(In {int((next_time - datetime.now(timezone.utc)).total_seconds() // 60)} minutes)*"
-                )
+        await channel.send(
+            (
+                "🌫️ **The Vale grows restless…**\n"
+                "A new wandering threat is expected.\n\n"
+                f"🕰️ **Next Spawn:** <t:{int(next_time.timestamp())}:F>\n"
+                f"⏳ *(In {int((next_time - datetime.now(timezone.utc)).total_seconds() // 60)} minutes)*"
             )
+        )
 
 
     # ---------- Embeds ----------
