@@ -459,6 +459,27 @@ async def refresh_quest_board(bot: commands.Bot):
         embed = build_board_embed()
         await msg.edit(embed=embed, view=QuestBoardView())
 
+        # --------------------------------------------------
+        # 🔄 SYNC FACTION POWER UNLOCKS → SEASONAL STATE
+        # --------------------------------------------------
+        state = get_season_state()
+        changed = False
+
+        for faction_id, points in board.faction_points.items():
+            if (
+                points >= board.faction_goal
+                and not state["faction_powers"][faction_id]["unlocked"]
+            ):
+                state["faction_powers"][faction_id]["unlocked"] = True
+                changed = True
+
+        if changed:
+            save_season(state)
+
+            # If a seasonal boss is active, update its embed immediately
+            if state.get("active"):
+                await update_seasonal_embed(bot)
+
     except discord.NotFound:
         # 🔥 AUTO-HEAL: message was deleted
         print("⚠ Quest board message missing. Clearing anchor.")
@@ -1237,6 +1258,15 @@ async def season_boss_set(
         )
 
     state = get_season_state()
+    # 🔄 Sync faction power unlocks from quest board
+    board = quest_manager.quest_board
+    for faction_id, points in board.faction_points.items():
+        if (
+            points >= board.faction_goal
+            and not state["faction_powers"][faction_id]["unlocked"]
+        ):
+            state["faction_powers"][faction_id]["unlocked"] = True
+
     boss = state["boss"]
 
     changes = []

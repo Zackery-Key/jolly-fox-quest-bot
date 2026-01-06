@@ -29,19 +29,22 @@ def get_season_state():
     return state
 
 
-def reset_votes_for_new_day(state: dict):
+def reset_votes_for_new_day(state: dict, force: bool = False):
+    """
+    Reset all faction votes.
+    - Normal mode: once per UTC day
+    - force=True: always reset (admin/manual resolve)
+    """
     today = str(date.today())
 
-    if state["date"] == today:
+    if not force and state.get("date") == today:
         return
 
     state["date"] = today
 
-    for faction in state["votes"]:
+    for faction in state.get("votes", {}):
         for action in state["votes"][faction]:
             state["votes"][faction][action].clear()
-
-    save_season(state)
 
 
 def register_vote(state: dict, user_id: int, faction: str, action: str):
