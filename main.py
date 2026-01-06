@@ -17,7 +17,7 @@ from systems.seasonal.state import (
 )
 from systems.seasonal.storage import save_season
 from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
-
+from systems.quests.factions import FACTION_ROLE_IDS
 
 from systems.quests.npc_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
@@ -79,6 +79,30 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ========= Shared Helpers =========
 
+async def update_seasonal_embed(bot):
+    state = get_season_state()
+    embed_info = state.get("embed", {})
+
+    channel_id = embed_info.get("channel_id")
+    message_id = embed_info.get("message_id")
+
+    if not channel_id or not message_id:
+        return
+
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        return
+
+    try:
+        message = await channel.fetch_message(message_id)
+        await message.edit(
+            embed=build_seasonal_embed(),
+            view=SeasonalVoteView(),
+        )
+    except Exception as e:
+        print(f"[SEASON] Failed to update embed: {e}")
+
+
 def estimate_expected_daily_votes(
     guild: discord.Guild,
     participation_rate: float = 0.35,
@@ -86,16 +110,16 @@ def estimate_expected_daily_votes(
     """
     Estimate total daily votes based on faction role sizes.
     """
-    from systems.quests.factions import FACTIONS
-
     total_members = 0
-    for faction in FACTIONS.values():
-        role_id = faction.role_id
+
+    for faction_id, role_id in FACTION_ROLE_IDS.items():
         if not role_id:
             continue
+
         role = guild.get_role(role_id)
         if role:
             total_members += len(role.members)
+
 
     # Safety floor so small servers don’t break
     return max(10, int(total_members * participation_rate))
@@ -1043,7 +1067,10 @@ async def season_reset(interaction: discord.Interaction):
     )
 
 
-@bot.tree.command(name="season_resolve_now",description="Force-resolve the seasonal boss for the current day.")
+@bot.tree.command(
+    name="season_resolve_now",
+    description="Force-resolve the seasonal boss for the current day."
+)
 @app_commands.default_permissions(manage_guild=True)
 async def season_resolve_now(interaction: discord.Interaction):
     state = get_season_state()
@@ -1057,28 +1084,22 @@ async def season_resolve_now(interaction: discord.Interaction):
     # 🔥 Resolve immediately
     summary = resolve_daily_boss(state)
 
-    # 🔄 Reset votes
-    reset_votes_for_new_day(state)
+    # 🔄 FORCE reset votes (important)
+    reset_votes_for_new_day(state, force=True)
 
     # 💾 Save
     save_season(state)
 
-    # 🖼️ Update embed
-    embed = build_seasonal_embed()
-    view = SeasonalVoteView()
+    # 🖼️ EDIT the existing seasonal embed
+    await update_seasonal_embed(bot)
 
-    if interaction.channel:
-        await interaction.channel.send(
-            "⚙️ **Season manually resolved by admin.**",
-            embed=embed,
-            view=view,
-        )
-
+    # ✅ Admin confirmation only (no new embed)
     await interaction.response.send_message(
-        f"✅ Seasonal boss resolved.\n"
+        f"⚙️ **Season manually resolved.**\n"
         f"Boss HP: {summary['boss_hp_before']} → {summary['boss_hp_after']}",
         ephemeral=True,
     )
+
 
 @bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
 @app_commands.default_permissions(manage_guild=True)
@@ -1113,6 +1134,89 @@ async def season_event(interaction: discord.Interaction):
     state["embed"]["message_id"] = msg.id
     from systems.seasonal.storage import save_season
     save_season(state)
+
+@bot.tree.command(name="season_faction_adjust",description="Adjust a faction's HP (boss strike or sudden aid).")
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.choices(
+    mode=[
+        app_commands.Choice(name="Add (Heal)", value="add"),
+        app_commands.Choice(name="Reduce (Damage)", value="reduce"),
+    ],
+    faction=[
+        app_commands.Choice(name="Shieldborne", value="shieldborne"),
+        app_commands.Choice(name="Spellfire", value="spellfire"),
+        app_commands.Choice(name="Verdant", value="verdant"),
+    ],
+)
+async def season_faction_adjust(
+    interaction: discord.Interaction,
+    faction: app_commands.Choice[str],
+    amount: int,
+    mode: app_commands.Choice[str],
+    reason: str | None = None,
+):
+    state = get_season_state()
+
+    if not state.get("active"):
+        return await interaction.response.send_message(
+            "❌ No active seasonal boss.",
+            ephemeral=True,
+        )
+
+    fh = state.get("faction_health", {}).get(faction.value)
+    boss_name = state.get("boss", {}).get("name", "The Boss")
+
+    if not fh:
+        return await interaction.response.send_message(
+            "❌ Invalid faction.",
+            ephemeral=True,
+        )
+
+    old_hp = fh["hp"]
+    max_hp = fh["max_hp"]
+
+    if mode.value == "add":
+        fh["hp"] = min(max_hp, fh["hp"] + amount)
+        delta = fh["hp"] - old_hp
+        title = "✨ Sudden Aid!"
+        description = (
+            f"**{boss_name}** hesitates as restorative forces surge.\n\n"
+            f"💚 **{faction.name}** recovers **{delta} HP**."
+        )
+        color = discord.Color.green()
+
+    else:  # reduce
+        fh["hp"] = max(0, fh["hp"] - amount)
+        delta = old_hp - fh["hp"]
+        title = "💥 Devastating Blow!"
+        description = (
+            f"**{boss_name}** unleashes a brutal strike!\n\n"
+            f"🩸 **{faction.name}** suffers **{delta} damage**."
+        )
+        color = discord.Color.red()
+
+    if reason:
+        description += f"\n\n*{reason}*"
+
+    save_season(state)
+
+    # Update the main seasonal embed
+    await update_seasonal_embed(bot)
+
+    # Post narrative embed
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=color,
+    )
+
+    await interaction.channel.send(embed=embed)
+
+    await interaction.response.send_message(
+        f"✅ {mode.name} applied to {faction.name}.",
+        ephemeral=True,
+    )
+
 
 @bot.tree.command(name="season_boss_set",description="Admin: Edit the seasonal boss (name, HP, phase, avatar).")
 @app_commands.default_permissions(manage_guild=True)
@@ -1151,7 +1255,7 @@ async def season_boss_set(
         initialize_season_boss_and_factions(state, expected_votes)
 
         changes.append(
-            f"Boss fight started (auto-balanced for ~14 days, {expected_votes} expected votes/day)"
+            f"Boss fight started (auto-balanced for ~7 days, {expected_votes} expected votes/day)"
         )
 
 

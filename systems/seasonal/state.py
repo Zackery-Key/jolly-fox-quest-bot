@@ -12,8 +12,10 @@ SPELLFIRE_ATTACK_BONUS = 6         # per Spellfire attack vote
 VERDANT_HEAL_BONUS = 6             # per Verdant heal vote
 
 # Boss retaliation model
-BOSS_RETALIATION_PER_ATTACK = 5
-DEFENSE_RETALIATION_REDUCTION = 4
+BASE_RETALIATION = 30              # always hurts, even with low votes
+RETALIATION_PER_5_ATTACKS = 10     # spike pressure for aggression
+DEFEND_REDUCTION = 4               # per defend vote
+
 
 # One-time power effects
 SPELLFIRE_GLOBAL_MULTIPLIER = 1.75   # multiplies ALL damage for the day
@@ -77,23 +79,16 @@ def _faction_majority_voted_power(state: dict, faction_id: str) -> bool:
 
     return total_votes > 0 and power_votes > (total_votes / 2)
 
-def resolve_daily_boss(state: dict) -> dict:
-    """
-    Resolve one day's votes into:
-    - boss HP damage (attack - defense)
-    - boss retaliation damage to faction health
-    - healing to faction health
-    - optional one-time faction powers (if majority voted and unlocked+unused)
+import random
 
-    Returns a summary dict (useful for logging).
-    """
+def resolve_daily_boss(state: dict) -> dict:
     votes = state.get("votes", {})
     boss = state.get("boss", {})
     faction_health = state.get("faction_health", {})
     powers = state.get("faction_powers", {})
 
     # -----------------------------
-    # Tally votes (global + per faction)
+    # Tally votes
     # -----------------------------
     total_attack = 0
     total_defend = 0
@@ -103,7 +98,7 @@ def resolve_daily_boss(state: dict) -> dict:
     bonus_defense = 0
     bonus_heal = 0
 
-    per_faction_counts: dict[str, dict[str, int]] = {}
+    per_faction_counts = {}
 
     for faction_id, actions in votes.items():
         atk = len(actions.get("attack", []))
@@ -119,7 +114,6 @@ def resolve_daily_boss(state: dict) -> dict:
         total_defend += dfn
         total_heal += heal
 
-        # Passive bonuses only for that faction’s matching action
         if faction_id == "spellfire":
             bonus_attack += atk * SPELLFIRE_ATTACK_BONUS
         if faction_id == "shieldborne":
@@ -128,78 +122,91 @@ def resolve_daily_boss(state: dict) -> dict:
             bonus_heal += heal * VERDANT_HEAL_BONUS
 
     # -----------------------------
-    # Determine power activations (majority vote)
+    # Power activation
     # -----------------------------
-    used_today: list[str] = []
+    used_today = []
 
     def can_use(fid: str) -> bool:
-        fp = powers.get(fid, {})
-        return bool(fp.get("unlocked")) and not bool(fp.get("used"))
+        return powers.get(fid, {}).get("unlocked") and not powers.get(fid, {}).get("used")
 
-    shieldborne_blocks_retaliation = False
+    shieldborne_blocks = False
     verdant_mass_heal = False
-    spellfire_global_amp = False
+    spellfire_amp = False
 
-    # Shieldborne
     if can_use("shieldborne") and _faction_majority_voted_power(state, "shieldborne"):
-        shieldborne_blocks_retaliation = True
+        shieldborne_blocks = True
         powers["shieldborne"]["used"] = True
         used_today.append("shieldborne")
 
-    # Verdant
     if can_use("verdant") and _faction_majority_voted_power(state, "verdant"):
         verdant_mass_heal = True
         powers["verdant"]["used"] = True
         used_today.append("verdant")
 
-    # Spellfire
     if can_use("spellfire") and _faction_majority_voted_power(state, "spellfire"):
-        spellfire_global_amp = True
+        spellfire_amp = True
         powers["spellfire"]["used"] = True
         used_today.append("spellfire")
 
     # -----------------------------
-    # Compute combat values
+    # Boss damage
     # -----------------------------
     raw_damage = (total_attack * BASE_ATTACK_DAMAGE) + bonus_attack
     defense = (total_defend * BASE_DEFENSE_REDUCTION) + bonus_defense
-    healing_total = (total_heal * BASE_HEAL) + bonus_heal
 
-    if spellfire_global_amp:
+    if spellfire_amp:
         raw_damage = int(raw_damage * SPELLFIRE_GLOBAL_MULTIPLIER)
 
     net_damage = max(0, raw_damage - defense)
 
-    # Apply boss damage
     boss_hp_before = int(boss.get("hp", 0))
     boss["hp"] = max(0, boss_hp_before - net_damage)
 
-    # Boss retaliation (hurts faction health)
-    retaliation = max(
-        0,
-        (total_attack * BOSS_RETALIATION_PER_ATTACK)
-        - (total_defend * DEFENSE_RETALIATION_REDUCTION)
-    )
+    # -----------------------------
+    # Boss retaliation (FIXED)
+    # -----------------------------
+    retaliation = BASE_RETALIATION
+    retaliation += (total_attack // 5) * RETALIATION_PER_5_ATTACKS
+    retaliation -= total_defend * DEFEND_REDUCTION
+    retaliation = max(0, retaliation)
 
-    if shieldborne_blocks_retaliation:
-        retaliation_applied = 0
-    else:
+    retaliation_target = None
+    retaliation_applied = 0
+
+    if not shieldborne_blocks and retaliation > 0 and faction_health:
+        # Weighted toward lowest HP faction
+        targets = list(faction_health.items())
+        targets.sort(key=lambda x: x[1]["hp"])
+
+        weights = [len(targets) - i for i in range(len(targets))]
+        retaliation_target, fh = random.choices(targets, weights=weights, k=1)[0]
+
+        fh["hp"] = max(0, fh["hp"] - retaliation)
         retaliation_applied = retaliation
-        for fid, fh in faction_health.items():
-            fh["hp"] = max(0, int(fh.get("hp", 0)) - retaliation_applied)
 
-    # Healing distributes evenly to all factions
-    healed_each = 0
-    if faction_health:
-        healed_each = healing_total // len(faction_health)
-        for fid, fh in faction_health.items():
-            fh["hp"] = min(int(fh.get("max_hp", 0)), int(fh.get("hp", 0)) + healed_each)
+    # -----------------------------
+    # Healing (SMART)
+    # -----------------------------
+    healing_pool = (total_heal * BASE_HEAL) + bonus_heal
 
-    # Verdant mass heal: +25% max to all factions
+    for _, fh in sorted(faction_health.items(), key=lambda x: x[1]["hp"]):
+        if healing_pool <= 0:
+            break
+
+        missing = fh["max_hp"] - fh["hp"]
+        if missing <= 0:
+            continue
+
+        applied = min(missing, healing_pool)
+        fh["hp"] += applied
+        healing_pool -= applied
+
     if verdant_mass_heal:
-        for fid, fh in faction_health.items():
-            add = int(int(fh.get("max_hp", 0)) * VERDANT_MASS_HEAL_PCT)
-            fh["hp"] = min(int(fh.get("max_hp", 0)), int(fh.get("hp", 0)) + add)
+        for fh in faction_health.values():
+            fh["hp"] = min(
+                fh["max_hp"],
+                fh["hp"] + int(fh["max_hp"] * VERDANT_MASS_HEAL_PCT)
+            )
 
     return {
         "boss_hp_before": boss_hp_before,
@@ -208,8 +215,7 @@ def resolve_daily_boss(state: dict) -> dict:
         "defense": defense,
         "net_damage": net_damage,
         "retaliation": retaliation_applied,
-        "healing_total": healing_total,
-        "healed_each": healed_each,
+        "retaliation_target": retaliation_target,
         "powers_used": used_today,
         "per_faction": per_faction_counts,
     }
