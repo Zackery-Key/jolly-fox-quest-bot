@@ -31,13 +31,30 @@ def build_seasonal_embed():
         atk = len(votes.get("attack", []))
         dfn = len(votes.get("defend", []))
         heal = len(votes.get("heal", []))
+        pwr = len(votes.get("power", []))
+
+        # faction HP display (if exists)
+        fh = state.get("faction_health", {}).get(faction_id, {})
+        fhp = fh.get("hp", 0)
+        fmax = fh.get("max_hp", 0)
+
+        fp = state["faction_powers"].get(faction_id, {})
+        power_status = (
+            "❌ Used"
+            if fp.get("used")
+            else "⚡ Ready"
+            if fp.get("unlocked")
+            else "🔒 Locked"
+        )
 
         embed.add_field(
             name=f"{faction.emoji} {faction.name}",
             value=(
+                f"❤️ HP: **{fhp} / {fmax}**\n"
                 f"⚔️ Attack: **{atk}**\n"
                 f"🛡️ Defend: **{dfn}**\n"
-                f"💚 Heal: **{heal}**"
+                f"💚 Heal: **{heal}**\n"
+                f"⚡ Power: **{pwr}** ({power_status})"
             ),
             inline=True,
         )
@@ -51,6 +68,30 @@ def build_seasonal_embed():
 class SeasonalVoteView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+        self._update_power_button_state()
+
+    def _update_power_button_state(self):
+        state = get_season_state()
+        powers = state.get("faction_powers", {})
+
+        # Default: enabled
+        disable = False
+        label = "⚡ Power"
+
+        # If ALL faction powers are either unused but unlocked OR used?
+        # We disable per-user in handler, but globally disable if power is spent.
+        for fp in powers.values():
+            if fp.get("used"):
+                disable = True
+                label = "⚡ Power (Used)"
+                break
+
+        # Find the power button and update it
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.label.startswith("⚡"):
+                item.disabled = disable
+                item.label = label
+
 
     async def _handle_vote(self, interaction: discord.Interaction, action: str):
         faction = get_member_faction_id(interaction.user)
@@ -62,12 +103,30 @@ class SeasonalVoteView(discord.ui.View):
             )
 
         state = get_season_state()
+
+        # ❌ Block power vote if not allowed
+        if action == "power":
+            fp = state["faction_powers"].get(faction)
+
+            if not fp or not fp.get("unlocked"):
+                return await interaction.response.send_message(
+                    "❌ Your faction has not unlocked its power yet.",
+                    ephemeral=True,
+                )
+
+            if fp.get("used"):
+                return await interaction.response.send_message(
+                    "❌ Your faction’s power has already been used this season.",
+                    ephemeral=True,
+                )
+
         success = register_vote(
             state,
             interaction.user.id,
             faction,
             action,
         )
+
 
         if not success:
             return await interaction.response.send_message(
@@ -94,3 +153,7 @@ class SeasonalVoteView(discord.ui.View):
     @discord.ui.button(label="💚 Heal", style=discord.ButtonStyle.success)
     async def heal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_vote(interaction, "heal")
+
+    @discord.ui.button(label="⚡ Power", style=discord.ButtonStyle.secondary)
+    async def power(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_vote(interaction, "power")

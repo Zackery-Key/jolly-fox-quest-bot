@@ -6,6 +6,17 @@ import discord
 from discord.ext import commands
 import io
 import json
+import asyncio
+from datetime import datetime, timedelta, timezone
+
+from systems.seasonal.state import (
+    get_season_state,
+    resolve_daily_boss,
+    reset_votes_for_new_day,
+    reset_season_state,
+)
+from systems.seasonal.storage import save_season
+from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
 
 
 from systems.quests.npc_models import get_npc_quest_dialogue
@@ -67,6 +78,103 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 # ========= Shared Helpers =========
+
+def estimate_expected_daily_votes(
+    guild: discord.Guild,
+    participation_rate: float = 0.35,
+) -> int:
+    """
+    Estimate total daily votes based on faction role sizes.
+    """
+    from systems.quests.factions import FACTIONS
+
+    total_members = 0
+    for faction in FACTIONS.values():
+        role_id = faction.role_id
+        if not role_id:
+            continue
+        role = guild.get_role(role_id)
+        if role:
+            total_members += len(role.members)
+
+    # Safety floor so small servers don’t break
+    return max(10, int(total_members * participation_rate))
+
+async def seasonal_midnight_loop(bot: discord.Client):
+    await bot.wait_until_ready()
+
+    while not bot.is_closed():
+        await sleep_until_midnight_utc()
+
+        state = get_season_state()
+
+        # Do nothing if season is inactive
+        if not state.get("active"):
+            continue
+
+        # 🔥 Resolve the day
+        summary = resolve_daily_boss(state)
+
+        # 🔄 Reset votes for the new day
+        reset_votes_for_new_day(state)
+
+        # 💾 Persist state
+        save_season(state)
+
+        # 🖼️ Update embed if it exists
+        embed_info = state.get("embed", {})
+        channel_id = embed_info.get("channel_id")
+        message_id = embed_info.get("message_id")
+
+        if channel_id and message_id:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    message = await channel.fetch_message(message_id)
+                    await message.edit(
+                        embed=build_seasonal_embed(),
+                        view=SeasonalVoteView(),
+                    )
+                except Exception as e:
+                    print(f"[SEASON] Failed to update embed: {e}")
+
+def initialize_season_boss_and_factions(
+    state: dict,
+    expected_votes: int,
+    target_days: int = 7,
+):
+    from systems.seasonal.state import (
+        BASE_ATTACK_DAMAGE,
+        BOSS_RETALIATION_PER_ATTACK,
+    )
+
+    # Assume not all votes are attacks
+    expected_attack_votes = max(1, int(expected_votes * 0.45))
+
+    # 🐉 Boss HP = expected throughput × target days
+    boss_hp = int(expected_attack_votes * BASE_ATTACK_DAMAGE * target_days * 1.4)
+    boss_hp = max(500, boss_hp)
+
+    state["boss"]["hp"] = boss_hp
+    state["boss"]["max_hp"] = boss_hp
+    state["boss"]["phase"] = 1
+
+    # 🛡️ Faction HP = survive ~2–3 bad retaliation days
+    faction_hp = int(expected_attack_votes * BOSS_RETALIATION_PER_ATTACK * 2.5)
+    faction_hp = max(300, faction_hp)
+
+    for fid in state["faction_health"]:
+        state["faction_health"][fid]["hp"] = faction_hp
+        state["faction_health"][fid]["max_hp"] = faction_hp
+
+    # Reset faction power usage
+    for fp in state["faction_powers"].values():
+        fp["used"] = False
+
+    # Mark season active
+    state["active"] = True
+    state["day"] = 1
+
 
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
@@ -918,6 +1026,60 @@ wandering_manager.refresh_board_callback = refresh_quest_board
 
 # ========= ADMIN: Seasonal and Events =========
 
+
+@bot.tree.command(name="season_reset",description="Safely reset the seasonal boss state (no file deletion).")
+@app_commands.default_permissions(manage_guild=True)
+async def season_reset(interaction: discord.Interaction):
+    state = get_season_state()
+
+    reset_season_state(state)
+    save_season(state)
+
+    await interaction.response.send_message(
+        "♻️ **Seasonal state reset safely.**\n"
+        "Boss, votes, faction HP, and power usage have been reset.\n"
+        "_No data files were deleted._",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="season_resolve_now",description="Force-resolve the seasonal boss for the current day.")
+@app_commands.default_permissions(manage_guild=True)
+async def season_resolve_now(interaction: discord.Interaction):
+    state = get_season_state()
+
+    if not state.get("active"):
+        return await interaction.response.send_message(
+            "❌ No active seasonal boss.",
+            ephemeral=True,
+        )
+
+    # 🔥 Resolve immediately
+    summary = resolve_daily_boss(state)
+
+    # 🔄 Reset votes
+    reset_votes_for_new_day(state)
+
+    # 💾 Save
+    save_season(state)
+
+    # 🖼️ Update embed
+    embed = build_seasonal_embed()
+    view = SeasonalVoteView()
+
+    if interaction.channel:
+        await interaction.channel.send(
+            "⚙️ **Season manually resolved by admin.**",
+            embed=embed,
+            view=view,
+        )
+
+    await interaction.response.send_message(
+        f"✅ Seasonal boss resolved.\n"
+        f"Boss HP: {summary['boss_hp_before']} → {summary['boss_hp_after']}",
+        ephemeral=True,
+    )
+
 @bot.tree.command(name="season_event", description="Post or refresh the seasonal event.")
 @app_commands.default_permissions(manage_guild=True)
 async def season_event(interaction: discord.Interaction):
@@ -972,6 +1134,26 @@ async def season_boss_set(
     boss = state["boss"]
 
     changes = []
+
+    # ----------------------------------
+    # 🆕 START BOSS FIGHT (AUTO BALANCE)
+    # ----------------------------------
+    starting_new_fight = hp is None and max_hp is None
+
+    if starting_new_fight:
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "❌ Must be used in a server.",
+                ephemeral=True,
+            )
+
+        expected_votes = estimate_expected_daily_votes(interaction.guild)
+        initialize_season_boss_and_factions(state, expected_votes)
+
+        changes.append(
+            f"Boss fight started (auto-balanced for ~14 days, {expected_votes} expected votes/day)"
+        )
+
 
     if name is not None:
         boss["name"] = name
@@ -2068,6 +2250,13 @@ async def setup_hook():
     # Copy all global commands into the guild
     bot.tree.copy_global_to(guild=guild)
 
+async def sleep_until_midnight_utc():
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    await asyncio.sleep((tomorrow - now).total_seconds())
+
 
 @bot.event
 async def on_ready():
@@ -2083,6 +2272,8 @@ async def on_ready():
     bot.loop.create_task(
         wandering_manager.scheduled_spawn_loop(bot)
     )
+
+    bot.loop.create_task(seasonal_midnight_loop(bot))
 
     # 🔹 AUTO refresh quest board
     try:

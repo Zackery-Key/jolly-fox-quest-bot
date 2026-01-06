@@ -6,6 +6,8 @@ from . import storage
 from .quest_models import QuestTemplate, QuestType
 from .player_state import PlayerState
 from datetime import datetime, timezone
+from systems.seasonal.state import get_season_state
+from systems.seasonal.storage import save_season
 
 BETA_CUTOFF = datetime(2026, 1, 1, tzinfo=timezone.utc)
 FOUNDER_CUTOFF = datetime(2026, 3, 1, tzinfo=timezone.utc)
@@ -234,6 +236,15 @@ class QuestManager:
         if faction_id:
             current = self.quest_board.faction_points.get(faction_id, 0)
             self.quest_board.faction_points[faction_id] = current + amount
+
+        state = get_season_state()
+        if (
+            faction_id
+            and self.quest_board.faction_points[faction_id] >= self.quest_board.faction_goal
+            and not state["faction_powers"][faction_id]["unlocked"]
+        ):
+            state["faction_powers"][faction_id]["unlocked"] = True
+            save_season(state)
 
         # Persist
         self.save_board()

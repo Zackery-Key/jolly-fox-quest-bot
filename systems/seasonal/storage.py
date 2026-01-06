@@ -12,33 +12,47 @@ DEFAULT_SEASON_STATE = {
     "date": "",
     "boss": {
         "name": "Doom Fox",
-        "hp": 5000,
-        "max_hp": 5000,
+        "hp": 1,
+        "max_hp": 1,
         "phase": 1,
-        "avatar_url": "https://media.discordapp.net/attachments/1446565189142052945/1450232045044367513/658f559f6a24dd96c89aa09030a41b48.png?ex=6941c957&is=694077d7&hm=a3a48b6a696f5cce060e294da6f1fc3c780c806bd27fc34d62e45057f610ff31&=&format=webp&quality=lossless&width=839&height=839"
+        "avatar_url": "..."
     },
     "votes": {
         "shieldborne": {
             "attack": [],
             "defend": [],
-            "heal": []
+            "heal": [],
+            "power": []   
         },
         "spellfire": {
             "attack": [],
             "defend": [],
-            "heal": []
+            "heal": [],
+            "power": []   
         },
         "verdant": {
             "attack": [],
             "defend": [],
-            "heal": []
+            "heal": [],
+            "power": []   
         }
     },
-    "embed": {
-        "channel_id": None,
-        "message_id": None
-    }
+
+    "faction_health": {          
+        "shieldborne": {"hp": 1000, "max_hp": 1000},
+        "spellfire":   {"hp": 1000, "max_hp": 1000},
+        "verdant":     {"hp": 1000, "max_hp": 1000},
+    },
+
+    "faction_powers": {
+        "shieldborne": {"unlocked": False, "used": False},
+        "spellfire":   {"unlocked": False, "used": False},
+        "verdant":     {"unlocked": False, "used": False}
+    },
+
+    "embed": {"channel_id": None, "message_id": None}
 }
+
 
 
 def load_season():
@@ -49,6 +63,20 @@ def load_season():
 
     with open(SEASON_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
+            # -----------------------------
+    # 🔧 Auto-migrate missing keys
+    # -----------------------------
+    data.setdefault("faction_powers", DEFAULT_SEASON_STATE["faction_powers"])
+    data.setdefault("faction_health", DEFAULT_SEASON_STATE["faction_health"])
+    data.setdefault("boss", DEFAULT_SEASON_STATE["boss"])
+    data.setdefault("votes", DEFAULT_SEASON_STATE["votes"])
+    data.setdefault("embed", DEFAULT_SEASON_STATE["embed"])
+
+    # Ensure each faction has expected vote buckets (including "power")
+    for faction_id, default_actions in DEFAULT_SEASON_STATE["votes"].items():
+        data["votes"].setdefault(faction_id, {})
+        for action in default_actions.keys():
+            data["votes"][faction_id].setdefault(action, [])
 
     # Convert vote lists → sets
     for faction in data["votes"]:
