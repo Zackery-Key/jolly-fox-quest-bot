@@ -17,7 +17,7 @@ from systems.seasonal.state import (
 )
 from systems.seasonal.storage import save_season
 from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
-
+from systems.quests.factions import FACTION_ROLE_IDS
 
 from systems.quests.npc_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
@@ -86,16 +86,16 @@ def estimate_expected_daily_votes(
     """
     Estimate total daily votes based on faction role sizes.
     """
-    from systems.quests.factions import FACTIONS
-
     total_members = 0
-    for faction in FACTIONS.values():
-        role_id = faction.role_id
+
+    for faction_id, role_id in FACTION_ROLE_IDS.items():
         if not role_id:
             continue
+
         role = guild.get_role(role_id)
         if role:
             total_members += len(role.members)
+
 
     # Safety floor so small servers don’t break
     return max(10, int(total_members * participation_rate))
