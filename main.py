@@ -8,6 +8,7 @@ import io
 import json
 import asyncio
 from datetime import datetime, timedelta, timezone
+from systems.seasonal.state import BASE_ATTACK_DAMAGE
 
 from systems.seasonal.state import (
     get_season_state,
@@ -167,10 +168,6 @@ def initialize_season_boss_and_factions(
     expected_votes: int,
     target_days: int = 7,
 ):
-    from systems.seasonal.state import (
-        BASE_ATTACK_DAMAGE,
-        BOSS_RETALIATION_PER_ATTACK,
-    )
 
     # Assume not all votes are attacks
     expected_attack_votes = max(1, int(expected_votes * 0.45))
@@ -183,9 +180,14 @@ def initialize_season_boss_and_factions(
     state["boss"]["max_hp"] = boss_hp
     state["boss"]["phase"] = 1
 
-    # 🛡️ Faction HP = survive ~2–3 bad retaliation days
-    faction_hp = int(expected_attack_votes * BOSS_RETALIATION_PER_ATTACK * 2.5)
-    faction_hp = max(300, faction_hp)
+    # Faction HP should survive ~2–3 strong retaliation hits
+    FACTION_HP_MULTIPLIER = 60  # safe, tunable
+
+    faction_hp = max(
+        300,
+        expected_attack_votes * FACTION_HP_MULTIPLIER
+    )
+
 
     for fid in state["faction_health"]:
         state["faction_health"][fid]["hp"] = faction_hp
