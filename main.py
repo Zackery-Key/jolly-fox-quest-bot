@@ -171,31 +171,41 @@ def initialize_season_boss_and_factions(
     state: dict,
     expected_votes: int,
     target_days: int = 7,
+    difficulty: str = "normal",
 ):
+    from systems.seasonal.state import DIFFICULTY_PRESETS
+
+    preset = DIFFICULTY_PRESETS.get(difficulty, DIFFICULTY_PRESETS["normal"])
+    state["difficulty"] = difficulty
 
     # Assume not all votes are attacks
     expected_attack_votes = max(1, int(expected_votes * 0.45))
 
-    # 🐉 Boss HP = expected throughput × target days
-    boss_hp = int(expected_attack_votes * BASE_ATTACK_DAMAGE * target_days * 1.4)
+    base_boss_hp = int(
+        expected_attack_votes
+        * BASE_ATTACK_DAMAGE
+        * target_days
+        * 1.4
+    )
+
+    boss_hp = int(base_boss_hp * preset["boss_hp_multiplier"])
     boss_hp = max(500, boss_hp)
 
     state["boss"]["hp"] = boss_hp
     state["boss"]["max_hp"] = boss_hp
-    state["boss"]["phase"] = 1
 
     # Faction HP should survive ~2–3 strong retaliation hits
-    FACTION_HP_MULTIPLIER = 60  # safe, tunable
-
-    faction_hp = max(
+    base_faction_hp = max(
         300,
-        expected_attack_votes * FACTION_HP_MULTIPLIER
+        expected_attack_votes * 60
     )
 
+    faction_hp = int(base_faction_hp * preset["faction_hp_multiplier"])
 
     for fid in state["faction_health"]:
         state["faction_health"][fid]["hp"] = faction_hp
         state["faction_health"][fid]["max_hp"] = faction_hp
+
 
     # Reset faction power usage
     for fp in state["faction_powers"].values():
@@ -1245,14 +1255,26 @@ async def season_faction_adjust(
     )
 
 
-@bot.tree.command(name="season_boss_set",description="Admin: Edit the seasonal boss (name, HP, phase, avatar).")
+@bot.tree.command(name="season_boss_set",description="Admin: Edit the seasonal boss (name, HP, avatar).")
 @app_commands.default_permissions(manage_guild=True)
+@app_commands.choices(
+    boss_type=[
+        app_commands.Choice(name="Minor Boss (Monthly)", value="minor"),
+        app_commands.Choice(name="Seasonal Boss (Major)", value="seasonal"),
+    ],
+    difficulty=[
+        app_commands.Choice(name="Easy (Minor Boss)", value="easy"),
+        app_commands.Choice(name="Normal (Minor Boss)", value="normal"),
+        app_commands.Choice(name="Hard (Seasonal Boss)", value="hard"),
+    ]
+)
 async def season_boss_set(
     interaction: discord.Interaction,
+    boss_type: app_commands.Choice[str],
+    difficulty: app_commands.Choice[str],
     name: str | None = None,
     hp: int | None = None,
     max_hp: int | None = None,
-    phase: int | None = None,
     avatar_url: str | None = None,
 ):
     if not interaction.user.guild_permissions.manage_guild:
@@ -1288,7 +1310,22 @@ async def season_boss_set(
             )
 
         expected_votes = estimate_expected_daily_votes(interaction.guild)
-        initialize_season_boss_and_factions(state, expected_votes)
+        
+        difficulty_key = difficulty.value
+        # Store boss metadata
+        state["boss_type"] = boss_type.value
+        state["difficulty"] = difficulty_key
+
+        # Minor bosses are shorter
+        target_days = 5 if boss_type.value == "minor" else 7
+
+        initialize_season_boss_and_factions(
+            state,
+            expected_votes,
+            target_days=target_days,
+            difficulty=difficulty_key,
+        )
+
 
         changes.append(
             f"Boss fight started (auto-balanced for ~7 days, {expected_votes} expected votes/day)"
@@ -1308,10 +1345,6 @@ async def season_boss_set(
     if hp is not None:
         boss["hp"] = max(0, min(hp, boss["max_hp"]))
         changes.append(f"HP → **{boss['hp']}**")
-
-    if phase is not None:
-        boss["phase"] = max(1, phase)
-        changes.append(f"Phase → **{boss['phase']}**")
 
     if avatar_url is not None:
         boss["avatar_url"] = avatar_url

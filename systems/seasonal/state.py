@@ -21,6 +21,27 @@ DEFEND_REDUCTION = 4               # per defend vote
 SPELLFIRE_GLOBAL_MULTIPLIER = 1.75   # multiplies ALL damage for the day
 VERDANT_MASS_HEAL_PCT = 0.25         # heal all factions 25% max
 
+DIFFICULTY_PRESETS = {
+    "easy": {
+        "boss_hp_multiplier": 0.75,
+        "base_retaliation": 20,
+        "retaliation_per_5_attacks": 6,
+        "faction_hp_multiplier": 1.2,
+    },
+    "normal": {
+        "boss_hp_multiplier": 1.0,
+        "base_retaliation": 30,
+        "retaliation_per_5_attacks": 10,
+        "faction_hp_multiplier": 1.0,
+    },
+    "hard": {
+        "boss_hp_multiplier": 1.3,
+        "base_retaliation": 40,
+        "retaliation_per_5_attacks": 15,
+        "faction_hp_multiplier": 0.85,
+    },
+}
+
 
 def get_season_state():
     state = load_season()
@@ -168,8 +189,11 @@ def resolve_daily_boss(state: dict) -> dict:
     # -----------------------------
     # Boss retaliation (FIXED)
     # -----------------------------
-    retaliation = BASE_RETALIATION
-    retaliation += (total_attack // 5) * RETALIATION_PER_5_ATTACKS
+    difficulty = state.get("difficulty", "normal")
+    preset = DIFFICULTY_PRESETS[difficulty]
+
+    retaliation = preset["base_retaliation"]
+    retaliation += (total_attack // 5) * preset["retaliation_per_5_attacks"]
     retaliation -= total_defend * DEFEND_REDUCTION
     retaliation = max(0, retaliation)
 
@@ -249,7 +273,6 @@ def reset_season_state(state: dict):
     # Reset boss
     boss = state.get("boss", {})
     boss["hp"] = boss.get("max_hp", 1)
-    boss["phase"] = 1
 
     # Clear votes
     for faction in state.get("votes", {}):

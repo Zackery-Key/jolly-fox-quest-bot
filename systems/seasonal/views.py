@@ -8,6 +8,8 @@ from systems.quests.factions import get_member_faction_id
 def build_seasonal_embed():
     state = get_season_state()
     boss = state["boss"]
+    difficulty = state.get("difficulty", "normal").title()
+    boss_type = state.get("boss_type", "seasonal")
 
     # 🏁 Ended state
     if not state.get("active"):
@@ -36,12 +38,14 @@ def build_seasonal_embed():
         return embed
 
     # ✅ Create embed FIRST
+    label = "🟡 Minor Boss" if boss_type == "minor" else "🔴 Seasonal Boss"
+
     embed = discord.Embed(
-        title=f"🌍 Seasonal Event — {boss['name']}",
+        title=f"{label} — {boss['name']}",
         description=(
-            f"**Phase:** {boss['phase']}\n"
+            f"**Threat Level:** {difficulty}\n"
             f"**HP:** {boss['hp']} / {boss['max_hp']}\n\n"
-            "Each day, choose how your faction responds.\n"
+            "Each day, choose how you and your faction responds.\n"
             "_You may change your vote, but only one counts._"
         ),
         color=discord.Color.dark_green(),
@@ -89,11 +93,10 @@ def build_seasonal_embed():
 
     return embed
 
-
-
 class SeasonalVoteView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+
 
     async def _handle_vote(self, interaction: discord.Interaction, action: str):    
         state = get_season_state()

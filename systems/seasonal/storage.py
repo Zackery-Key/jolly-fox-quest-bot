@@ -10,11 +10,12 @@ DEFAULT_SEASON_STATE = {
     "active": False,
     "day": 1,
     "date": "",
+    "difficulty": "normal",
+    "boss_type": "seasonal",
     "boss": {
         "name": "Doom Fox",
         "hp": 1,
         "max_hp": 1,
-        "phase": 1,
         "avatar_url": "..."
     },
     "votes": {
