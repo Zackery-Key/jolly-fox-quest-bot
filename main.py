@@ -2500,6 +2500,8 @@ async def sleep_until_midnight_utc():
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     cmds = await bot.tree.sync(guild=guild)
+    if not os.getenv("WANDERING_PING_ROLE_ID"):
+        print("[WANDERING] ⚠️ Ping role not configured")
     print(f"Synced {len(cmds)} commands to guild {GUILD_ID}")
     print(f"Logged in as {bot.user}")
 

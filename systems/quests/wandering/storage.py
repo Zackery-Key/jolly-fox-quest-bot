@@ -63,6 +63,7 @@ def load_active_event():
             participants=set(data.get("participants", [])),
             participating_factions=set(data.get("participating_factions", [])),
             resolved=data.get("resolved", False),
+            image=data.get("image"),
         )
 
     except Exception as e:
@@ -97,6 +98,7 @@ def save_active_event(event: Optional[WanderingEvent]) -> None:
             "participants": list(event.participants),
             "participating_factions": list(event.participating_factions),
             "resolved": event.resolved,
+            "image": event.image,
         }
     }
 

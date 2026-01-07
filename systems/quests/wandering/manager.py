@@ -16,7 +16,6 @@ from datetime import datetime, timedelta, timezone
 
 
 EVENT_INTERVAL = 3 * 60 * 60  # 3 hours
-WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 SPAWN_HOURS = [0, 4, 8, 12, 16, 20]
 
 DIFFICULTY_TABLE = {
@@ -33,6 +32,20 @@ DIFFICULTY_SPAWN_WEIGHT = {
     "major": 10,
     "critical": 3,
 }
+
+def get_wandering_ping(bot: discord.Client, guild_id: int) -> str:
+    role_id = os.getenv("WANDERING_PING_ROLE_ID")
+    if not role_id:
+        print("[WANDERING] No WANDERING_PING_ROLE_ID set")
+        return ""
+
+    try:
+        guild = bot.get_guild(guild_id)
+        role = guild.get_role(int(role_id)) if guild else None
+        return role.mention if role else ""
+    except Exception as e:
+        print(f"[WANDERING] Failed to resolve ping role: {e}")
+        return ""
 
 def seconds_until_next_spawn(spawn_hours: list[int]) -> float:
         now = datetime.now(timezone.utc)
@@ -108,6 +121,8 @@ class WanderingEventManager:
             description=event.description,
             color=discord.Color.dark_purple(),
         )
+        if event.image:
+            embed.set_thumbnail(url=event.image)
         embed.add_field(name="Difficulty", value=event.difficulty.title(), inline=True)
         embed.add_field(name="⏳ Event Duration",value=f"{event.duration_minutes} minutes",inline=True,)
         embed.add_field(name="Participants",value=f"{len(event.participants)} / {event.required_participants}",inline=True)
@@ -123,6 +138,9 @@ class WanderingEventManager:
             description=f"**{event.title}**",
             color=color,
         )
+        if event.image:
+            embed.set_thumbnail(url=event.image)
+
         embed.add_field(
             name="Outcome",
             value="SUCCESS" if success else "FAILURE",
@@ -204,7 +222,7 @@ class WanderingEventManager:
             await self._refresh_active_message(bot)
 
 
-    async def spawn(self, bot: discord.Client, title: str, description: str, difficulty: str):
+    async def spawn(self, bot: discord.Client, title: str, description: str, difficulty: str, image=None):
         if difficulty not in DIFFICULTY_TABLE:
             raise ValueError(f"Invalid difficulty: {difficulty}")
 
@@ -228,16 +246,21 @@ class WanderingEventManager:
             faction_reward=cfg["faction"],
             global_reward=cfg["global"],
             xp_reward=cfg["xp"],
+            image=image,
         )
 
         self.active = event
 
         channel = bot.get_channel(self.luneth_channel_id) or await bot.fetch_channel(self.luneth_channel_id)
         
-        ping = f"<@&{WANDERING_PING_ROLE_ID}>"
+        ping = get_wandering_ping(bot, channel.guild.id)
+
+        content = "⚠️ **A wandering threat has appeared!**"
+        if ping:
+            content += f" {ping}"
 
         msg = await channel.send(
-            content=f"⚠️ **A wandering threat has appeared!** {ping}",
+            content=content,
             embed=self.build_event_embed(event),
             view=WanderingEventView(self, event.event_id),
         )
@@ -351,9 +374,8 @@ class WanderingEventManager:
                 )
             )
 
-
-        # Edit the event message to result state
-        await self._edit_to_result(bot, success)
+        await self._delete_active_message(bot)
+        await self._post_result_message(bot, success)
 
         event.resolved = True
         save_active_event(event)
@@ -413,16 +435,28 @@ class WanderingEventManager:
             # silently ignore; message could be deleted
             pass
 
-    async def _edit_to_result(self, bot: discord.Client, success: bool):
+    async def _delete_active_message(self, bot: discord.Client):
         event = self.active
         if not event or not event.message_id:
             return
         try:
             channel = bot.get_channel(event.channel_id) or await bot.fetch_channel(event.channel_id)
             msg = await channel.fetch_message(event.message_id)
-            await msg.edit(embed=self.build_result_embed(event, success), view=WanderingEventResolvedView())
+            await msg.delete()
         except Exception:
             pass
+
+    async def _post_result_message(self, bot: discord.Client, success: bool):
+        event = self.active
+        if not event:
+            return
+
+        channel = bot.get_channel(event.channel_id) or await bot.fetch_channel(event.channel_id)
+
+        await channel.send(
+            embed=self.build_result_embed(event, success),
+            view=WanderingEventResolvedView(),
+        )
 
     async def _schedule_delete(self, bot: discord.Client, delay_seconds: int = 600):
         event = self.active
@@ -500,6 +534,7 @@ class WanderingEventManager:
                 title=monster["title"],
                 description=monster["description"],
                 difficulty=monster["difficulty"],
+                image=monster.get("image"),
             )
 
     def get_next_spawn_time(self) -> datetime:
