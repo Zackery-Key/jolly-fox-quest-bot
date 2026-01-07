@@ -9,6 +9,32 @@ def build_seasonal_embed():
     state = get_season_state()
     boss = state["boss"]
 
+    # 🏁 Ended state
+    if not state.get("active"):
+        reason = state.get("ended_reason")
+
+        if reason == "boss_defeated":
+            title = f"🏆 Seasonal Event — {boss['name']}"
+            desc = (
+                "The boss has been defeated.\n\n"
+                "**Victory for the guild!**"
+            )
+            color = discord.Color.gold()
+        else:
+            title = f"💀 Seasonal Event — {boss['name']}"
+            desc = (
+                "All factions have fallen.\n\n"
+                "**The boss reigns supreme.**"
+            )
+            color = discord.Color.dark_red()
+
+        embed = discord.Embed(title=title, description=desc, color=color)
+
+        if boss.get("avatar_url"):
+            embed.set_thumbnail(url=boss["avatar_url"])
+
+        return embed
+
     # ✅ Create embed FIRST
     embed = discord.Embed(
         title=f"🌍 Seasonal Event — {boss['name']}",
@@ -93,7 +119,15 @@ class SeasonalVoteView(discord.ui.View):
                 item.label = label
 
 
-    async def _handle_vote(self, interaction: discord.Interaction, action: str):
+    async def _handle_vote(self, interaction: discord.Interaction, action: str):    
+        state = get_season_state()
+
+        if not state.get("active"):
+            return await interaction.response.send_message(
+                "⚠️ This seasonal event has ended.",
+                ephemeral=True,
+            )
+        
         faction = get_member_faction_id(interaction.user)
 
         if not faction:
@@ -157,3 +191,13 @@ class SeasonalVoteView(discord.ui.View):
     @discord.ui.button(label="⚡ Power", style=discord.ButtonStyle.secondary)
     async def power(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_vote(interaction, "power")
+
+class SeasonalEndedView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        for item in self.children:
+            item.disabled = True
+
+    @discord.ui.button(label="Event Ended", style=discord.ButtonStyle.secondary, disabled=True)
+    async def ended(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass

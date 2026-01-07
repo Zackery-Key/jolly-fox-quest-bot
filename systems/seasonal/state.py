@@ -211,16 +211,31 @@ def resolve_daily_boss(state: dict) -> dict:
                 fh["hp"] + int(fh["max_hp"] * VERDANT_MASS_HEAL_PCT)
             )
 
+    # -----------------------------
+    # END CONDITIONS
+    # -----------------------------
+
+    all_factions_defeated = all(
+        fh["hp"] <= 0 for fh in faction_health.values()
+    )
+
+    boss_defeated = boss["hp"] <= 0
+
+    if all_factions_defeated:
+        state["active"] = False
+        state["ended_reason"] = "factions_defeated"
+
+    elif boss_defeated:
+        state["active"] = False
+        state["ended_reason"] = "boss_defeated"
+
     return {
         "boss_hp_before": boss_hp_before,
         "boss_hp_after": boss["hp"],
-        "raw_damage": raw_damage,
-        "defense": defense,
-        "net_damage": net_damage,
-        "retaliation": retaliation_applied,
         "retaliation_target": retaliation_target,
         "powers_used": used_today,
-        "per_faction": per_faction_counts,
+        "ended": not state.get("active"),
+        "ended_reason": state.get("ended_reason"),
     }
 
 def reset_season_state(state: dict):

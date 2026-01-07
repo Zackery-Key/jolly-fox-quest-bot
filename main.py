@@ -9,7 +9,7 @@ import json
 import asyncio
 from datetime import datetime, timedelta, timezone
 from systems.seasonal.state import BASE_ATTACK_DAMAGE
-
+from systems.seasonal.views import SeasonalEndedView
 from systems.seasonal.state import (
     get_season_state,
     resolve_daily_boss,
@@ -96,13 +96,17 @@ async def update_seasonal_embed(bot):
 
     try:
         message = await channel.fetch_message(message_id)
+
+        # 🧠 Choose view based on event state
+        view = SeasonalVoteView() if state.get("active") else SeasonalEndedView()
+
         await message.edit(
             embed=build_seasonal_embed(),
-            view=SeasonalVoteView(),
+            view=view,
         )
+
     except Exception as e:
         print(f"[SEASON] Failed to update embed: {e}")
-
 
 def estimate_expected_daily_votes(
     guild: discord.Guild,
