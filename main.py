@@ -1339,6 +1339,17 @@ async def season_boss_set(
         ):
             state["faction_powers"][faction_id]["unlocked"] = True
 
+    # 🔄 Sync faction power unlocks from quest board
+    for faction_id in state["faction_powers"]:
+        board_points = board.faction_points.get(faction_id, 0)
+        goal = board.faction_goal
+
+        state["faction_powers"][faction_id]["unlocked"] = board_points >= goal
+
+    for fp in state["faction_powers"].values():
+        fp["used"] = False
+
+
     boss = state["boss"]
 
     changes = []
