@@ -67,6 +67,14 @@ def reset_votes_for_new_day(state: dict, force: bool = False):
         for action in state["votes"][faction]:
             state["votes"][faction][action].clear()
 
+    # Snapshot which factions are alive at start of day
+    state["alive_factions"] = {
+        fid
+        for fid, fh in state.get("faction_health", {}).items()
+        if fh["hp"] > 0
+    }
+
+
 
 def register_vote(state: dict, user_id: int, faction: str, action: str):
     if faction not in state["votes"]:
@@ -117,6 +125,7 @@ def resolve_daily_boss(state: dict) -> dict:
     total_attack = 0
     total_defend = 0
     total_heal = 0
+    total_votes = 0
 
     bonus_attack = 0
     bonus_defense = 0
@@ -129,6 +138,7 @@ def resolve_daily_boss(state: dict) -> dict:
         dfn = len(actions.get("defend", []))
         heal = len(actions.get("heal", []))
         pwr = len(actions.get("power", []))
+        total_votes += atk + dfn + heal + pwr
 
         per_faction_counts[faction_id] = {
             "attack": atk, "defend": dfn, "heal": heal, "power": pwr
@@ -193,17 +203,24 @@ def resolve_daily_boss(state: dict) -> dict:
     preset = DIFFICULTY_PRESETS[difficulty]
 
     retaliation = preset["base_retaliation"]
-    retaliation += (total_attack // 5) * preset["retaliation_per_5_attacks"]
+    retaliation += (total_votes // 5) * preset["retaliation_per_5_attacks"]
     retaliation -= total_defend * DEFEND_REDUCTION
     retaliation = max(0, retaliation)
 
     retaliation_target = None
     retaliation_applied = 0
 
-    if not shieldborne_blocks and retaliation > 0 and faction_health:
-        # Weighted toward lowest HP faction
-        targets = list(faction_health.items())
-        targets.sort(key=lambda x: x[1]["hp"])
+    if not shieldborne_blocks and retaliation > 0:
+        targets = [
+            (fid, fh)
+            for fid, fh in faction_health.items()
+            if fh["hp"] > 0
+        ]
+
+        if not targets:
+            retaliation_target = None
+        else:
+            targets.sort(key=lambda x: x[1]["hp"])
 
         weights = [len(targets) - i for i in range(len(targets))]
         retaliation_target, fh = random.choices(targets, weights=weights, k=1)[0]

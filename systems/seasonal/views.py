@@ -109,6 +109,14 @@ class SeasonalVoteView(discord.ui.View):
         
         faction = get_member_faction_id(interaction.user)
 
+        alive = state.get("alive_factions", set())
+
+        if faction not in alive:
+            return await interaction.response.send_message(
+                "💀 Your faction was defeated in a previous battle and cannot act.",
+                ephemeral=True,
+            )
+
         if not faction:
             return await interaction.response.send_message(
                 "❌ You must belong to a faction to participate.",

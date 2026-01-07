@@ -72,6 +72,9 @@ def load_season():
     data.setdefault("boss", DEFAULT_SEASON_STATE["boss"])
     data.setdefault("votes", DEFAULT_SEASON_STATE["votes"])
     data.setdefault("embed", DEFAULT_SEASON_STATE["embed"])
+    data.setdefault("alive_factions", [])
+    data["alive_factions"] = set(data["alive_factions"])
+
 
     # Ensure each faction has expected vote buckets (including "power")
     for faction_id, default_actions in DEFAULT_SEASON_STATE["votes"].items():
@@ -91,6 +94,7 @@ def load_season():
 
 def save_season(state: dict):
     serializable = state.copy()
+    serializable["alive_factions"] = list(state.get("alive_factions", []))
 
     serializable["votes"] = {
         faction: {

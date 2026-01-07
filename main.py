@@ -1228,15 +1228,26 @@ async def season_faction_adjust(
     old_hp = fh["hp"]
     max_hp = fh["max_hp"]
 
+    revived = False
+
     if mode.value == "add":
         fh["hp"] = min(max_hp, fh["hp"] + amount)
         delta = fh["hp"] - old_hp
-        title = "✨ Sudden Aid!"
+
+        # 🔁 REVIVAL CHECK
+        if old_hp <= 0 and fh["hp"] > 0:
+            revived = True
+            state.setdefault("alive_factions", set()).add(faction.value)
+
+        title = "✨ Faction Revived!" if revived else "✨ Sudden Aid!"
         description = (
+            f"⚡ **{faction.name}** surges back into the fight!\n\n"
+            f"💚 Restored **{delta} HP**."
+            if revived else
             f"**{boss_name}** hesitates as restorative forces surge.\n\n"
             f"💚 **{faction.name}** recovers **{delta} HP**."
         )
-        color = discord.Color.green()
+        color = discord.Color.gold() if revived else discord.Color.green()
 
     else:  # reduce
         fh["hp"] = max(0, fh["hp"] - amount)
@@ -1252,6 +1263,16 @@ async def season_faction_adjust(
         description += f"\n\n*{reason}*"
 
     save_season(state)
+
+    if revived:
+        await log_admin_action(
+            interaction.client,
+            f"✨ **Faction Revived**\n"
+            f"• Faction: **{faction.name}**\n"
+            f"• HP Restored: **{fh['hp']} / {fh['max_hp']}**\n"
+            f"• By: {interaction.user.mention}"
+        )
+
 
     # Update the main seasonal embed
     await update_seasonal_embed(bot)
