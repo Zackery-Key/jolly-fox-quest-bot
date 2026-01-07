@@ -19,7 +19,8 @@ from systems.seasonal.state import (
 from systems.seasonal.storage import save_season
 from systems.seasonal.views import build_seasonal_embed, SeasonalVoteView
 from systems.quests.factions import FACTION_ROLE_IDS
-
+from systems.seasonal.state import sync_power_unlocks_from_board
+from systems.seasonal.state import DIFFICULTY_PRESETS
 from systems.quests.npc_models import get_npc_quest_dialogue
 from systems.quests.quest_manager import QuestManager
 from systems.quests.quest_models import QuestType, QuestTemplate
@@ -187,7 +188,7 @@ def initialize_season_boss_and_factions(
     target_days: int = 7,
     difficulty: str = "normal",
 ):
-    from systems.seasonal.state import DIFFICULTY_PRESETS
+    sync_power_unlocks_from_board(state, quest_manager.quest_board)
 
     preset = DIFFICULTY_PRESETS.get(difficulty, DIFFICULTY_PRESETS["normal"])
     state["difficulty"] = difficulty
@@ -1332,20 +1333,8 @@ async def season_boss_set(
     state = get_season_state()
     # 🔄 Sync faction power unlocks from quest board
     board = quest_manager.quest_board
-    for faction_id, points in board.faction_points.items():
-        if (
-            points >= board.faction_goal
-            and not state["faction_powers"][faction_id]["unlocked"]
-        ):
-            state["faction_powers"][faction_id]["unlocked"] = True
 
     # 🔄 Sync faction power unlocks from quest board
-    for faction_id in state["faction_powers"]:
-        board_points = board.faction_points.get(faction_id, 0)
-        goal = board.faction_goal
-
-        state["faction_powers"][faction_id]["unlocked"] = board_points >= goal
-
     for fp in state["faction_powers"].values():
         fp["used"] = False
 

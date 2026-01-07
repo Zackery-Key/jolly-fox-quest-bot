@@ -42,6 +42,12 @@ DIFFICULTY_PRESETS = {
     },
 }
 
+def sync_power_unlocks_from_board(state, board):
+    for faction_id in state["faction_powers"]:
+        points = board.faction_points.get(faction_id, 0)
+        state["faction_powers"][faction_id]["unlocked"] = (
+            points >= board.faction_goal
+        )
 
 def get_season_state():
     state = load_season()
