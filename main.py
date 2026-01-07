@@ -231,6 +231,14 @@ def initialize_season_boss_and_factions(
     state["active"] = True
     state["day"] = 1
 
+    # 🟢 New boss = everyone alive again
+    state["alive_factions"] = {
+        fid
+        for fid, fh in state.get("faction_health", {}).items()
+        if fh["hp"] > 0
+    }
+
+
 
 def make_progress_bar(value: int, max_value: int, length: int = 20) -> str:
     """Simple text progress bar for embeds."""
@@ -1368,6 +1376,9 @@ async def season_boss_set(
             difficulty=difficulty_key,
         )
 
+        # 🔄 Reset faction power usage (new fight = fresh powers)
+        for fp in state["faction_powers"].values():
+            fp["used"] = False
 
         changes.append(
         f"Boss fight started ({votes} expected votes/day — "
