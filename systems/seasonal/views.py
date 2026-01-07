@@ -94,30 +94,6 @@ def build_seasonal_embed():
 class SeasonalVoteView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self._update_power_button_state()
-
-    def _update_power_button_state(self):
-        state = get_season_state()
-        powers = state.get("faction_powers", {})
-
-        # Default: enabled
-        disable = False
-        label = "⚡ Power"
-
-        # If ALL faction powers are either unused but unlocked OR used?
-        # We disable per-user in handler, but globally disable if power is spent.
-        for fp in powers.values():
-            if fp.get("used"):
-                disable = True
-                label = "⚡ Power (Used)"
-                break
-
-        # Find the power button and update it
-        for item in self.children:
-            if isinstance(item, discord.ui.Button) and item.label.startswith("⚡"):
-                item.disabled = disable
-                item.label = label
-
 
     async def _handle_vote(self, interaction: discord.Interaction, action: str):    
         state = get_season_state()
