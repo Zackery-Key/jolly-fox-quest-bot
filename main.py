@@ -53,6 +53,7 @@ TAVERN_CHANNEL_ID = int(os.getenv("TAVERN_CHANNEL_ID", 0))
 LUNETH_VALE_CHANNEL_ID = int(os.getenv("LUNETH_VALE_CHANNEL_ID", 0))
 WANDERING_PING_ROLE_ID = int(os.getenv("WANDERING_PING_ROLE_ID", 0))
 QUEST_POINTS = 5
+DAILY_QUEST_COMPLETIONS = 0
 
 # Quest Manager
 quest_manager = QuestManager()
@@ -127,9 +128,22 @@ def estimate_expected_daily_votes(
 
 
     # Safety floor so small servers don’t break
-    return max(10, int(total_members * participation_rate))
+    return max(5, int(total_members * participation_rate))
 
 async def seasonal_midnight_loop(bot: discord.Client):
+    global DAILY_QUEST_COMPLETIONS
+
+    # 📊 Log daily quest completions
+    log_channel = bot.get_channel(POINTS_LOG_CHANNEL_ID)
+    if log_channel:
+        await log_channel.send(
+            f"📊 **Daily Quest Report**\n"
+            f"• Date (UTC): {date.today()}\n"
+            f"• Quests Completed: **{DAILY_QUEST_COMPLETIONS}**"
+        )
+
+    # 🔄 Reset counter
+    DAILY_QUEST_COMPLETIONS = 0
     await bot.wait_until_ready()
 
     while not bot.is_closed():
@@ -181,11 +195,13 @@ def initialize_season_boss_and_factions(
     # Assume not all votes are attacks
     expected_attack_votes = max(1, int(expected_votes * 0.45))
 
+    padding = 1.2 if target_days == 5 else 1.4
+
     base_boss_hp = int(
         expected_attack_votes
         * BASE_ATTACK_DAMAGE
         * target_days
-        * 1.4
+        * padding
     )
 
     boss_hp = int(base_boss_hp * preset["boss_hp_multiplier"])
@@ -1276,6 +1292,7 @@ async def season_boss_set(
     hp: int | None = None,
     max_hp: int | None = None,
     avatar_url: str | None = None,
+    expected_votes: int | None = None,
 ):
     if not interaction.user.guild_permissions.manage_guild:
         return await interaction.response.send_message(
@@ -1309,7 +1326,11 @@ async def season_boss_set(
                 ephemeral=True,
             )
 
-        expected_votes = estimate_expected_daily_votes(interaction.guild)
+        if expected_votes is not None:
+            votes = max(1, expected_votes)
+        else:
+            votes = estimate_expected_daily_votes(interaction.guild)
+
         
         difficulty_key = difficulty.value
         # Store boss metadata
@@ -1321,16 +1342,16 @@ async def season_boss_set(
 
         initialize_season_boss_and_factions(
             state,
-            expected_votes,
+            votes,
             target_days=target_days,
             difficulty=difficulty_key,
         )
 
 
         changes.append(
-            f"Boss fight started (auto-balanced for ~7 days, {expected_votes} expected votes/day)"
-        )
-
+        f"Boss fight started ({votes} expected votes/day — "
+        f"{'manual' if expected_votes else 'auto'})"
+    )
 
     if name is not None:
         boss["name"] = name
@@ -2150,6 +2171,9 @@ async def talk(interaction: discord.Interaction):
     reply_text = get_npc_quest_dialogue(npc, template)
 
     result = quest_manager.complete_daily(interaction.user.id)
+    global DAILY_QUEST_COMPLETIONS
+    if result.get("completed"):
+        DAILY_QUEST_COMPLETIONS += 1
 
     if result.get("completed"):
         await handle_progression_announcements(
@@ -2207,6 +2231,9 @@ async def skill(interaction: discord.Interaction):
         else None
     )
     result = quest_manager.complete_daily(interaction.user.id)
+    global DAILY_QUEST_COMPLETIONS
+    if result.get("completed"):
+        DAILY_QUEST_COMPLETIONS += 1
 
     if result.get("completed"):
         await handle_progression_announcements(
@@ -2260,6 +2287,9 @@ async def checkin(interaction: discord.Interaction):
     npc = quest_manager.get_npc(template.npc_id) if template.npc_id else None
     dialogue = get_npc_quest_dialogue(npc, template) if npc else None
     result = quest_manager.complete_daily(interaction.user.id)
+    global DAILY_QUEST_COMPLETIONS
+    if result.get("completed"):
+        DAILY_QUEST_COMPLETIONS += 1
 
     if result.get("completed"):
         await handle_progression_announcements(
@@ -2382,6 +2412,9 @@ async def turnin(interaction: discord.Interaction):
     player.consume_item(template.item_name)
     quest_manager.save_players()
     result = quest_manager.complete_daily(interaction.user.id)
+    global DAILY_QUEST_COMPLETIONS
+    if result.get("completed"):
+        DAILY_QUEST_COMPLETIONS += 1
 
     if result.get("completed"):
         await handle_progression_announcements(
