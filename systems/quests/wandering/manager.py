@@ -125,7 +125,8 @@ class WanderingEventManager:
             embed.set_thumbnail(url=event.image)
         embed.add_field(name="Difficulty", value=event.difficulty.title(), inline=True)
         embed.add_field(name="⏳ Event Duration",value=f"{event.duration_minutes} minutes",inline=True,)
-        embed.add_field(name="Participants",value=f"{len(event.participants)} / {event.required_participants}",inline=True)
+        embed.add_field(name="Hunters",value=f"{len(event.participants)}",inline=True)
+        embed.add_field(name="Monster Health",value=f"{event.required_participants}",inline=True)
         embed.set_footer(text="Join the hunt before it vanishes into the mist.")
         return embed
 
