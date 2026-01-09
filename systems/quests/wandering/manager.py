@@ -20,10 +20,10 @@ SPAWN_HOURS = [0, 4, 8, 12, 16, 20]
 
 DIFFICULTY_TABLE = {
     "test":    {"minutes": 5,  "required": 1,  "faction": 5,  "global": 5,  "xp": 10},
-    "minor":   {"minutes": 15, "required": 1,  "faction": 10, "global": 10, "xp": 20},
-    "standard":{"minutes": 20, "required": 3,  "faction": 20, "global": 20, "xp": 30},
-    "major":   {"minutes": 30, "required": 5,  "faction": 30, "global": 25, "xp": 40},
-    "critical":{"minutes": 30, "required": 8, "faction": 40, "global": 30, "xp": 50},
+    "minor":   {"minutes": 15, "required": 3,  "faction": 10, "global": 10, "xp": 20},
+    "standard":{"minutes": 20, "required": 5,  "faction": 20, "global": 20, "xp": 30},
+    "major":   {"minutes": 30, "required": 8,  "faction": 30, "global": 25, "xp": 40},
+    "critical":{"minutes": 30, "required": 12, "faction": 40, "global": 30, "xp": 50},
 }
 
 DIFFICULTY_SPAWN_WEIGHT = {
