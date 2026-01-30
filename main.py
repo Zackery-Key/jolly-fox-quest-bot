@@ -82,6 +82,46 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ========= Shared Helpers =========
 
+GUILD_HERO_STRIKES = [
+    {
+        "name": "Orlin The Vigilant Gatekeeper",
+        "tagline": "raises a hand and the air collapses into a perfect circle of force",
+        "hit": (
+            "A crushing arcane singularity detonates point-blank, "
+            "ripping armor, bone, and magic apart in the same breath."
+        )
+    },
+    {
+        "name": "Celara The Grand Archivist",
+        "tagline": "slams her staff into the ground and calls the names of fallen champions",
+        "hit": (
+            "Spectral figures tear out of the air like a breaking line—"
+            "charging, striking, and overwhelming the foe in a coordinated assault "
+            "that hits with the weight of countless battles fought and won."
+        )
+    },
+    {
+        "name": "Tiberion The Honored Oathbound",
+        "tagline": "charges like a falling star, shield first, blade following",
+        "hit": (
+            "The impact is cathedral-loud. Radiant power sears through the strike, "
+            "pinning the foe in place long enough for the guild to carve the moment open."
+        )
+    },
+    {
+        "name": "Trinity The Great Tactician",
+        "tagline": "slides in with a commander’s calm and a duelist’s precision",
+        "hit": (
+            "In a blur of motion, she dismantles the enemy’s stance, driving it where it cannot recover. "
+            "The monster stumbles, suddenly fighting on her terms."
+        )
+    },
+]
+
+def roll_guild_hero_strike() -> dict:
+    return random.choice(GUILD_HERO_STRIKES)
+
+
 async def update_seasonal_embed(bot):
     state = get_season_state()
     embed_info = state.get("embed", {})
@@ -1328,6 +1368,98 @@ async def season_faction_adjust(
         ephemeral=True,
     )
 
+@bot.tree.command(
+    name="season_boss_adjust",
+    description="Adjust the boss HP (admin narrative heal/damage)."
+)
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.choices(
+    mode=[
+        app_commands.Choice(name="Add (Heal Boss)", value="add"),
+        app_commands.Choice(name="Reduce (Damage Boss)", value="reduce"),
+    ]
+)
+async def season_boss_adjust(
+    interaction: discord.Interaction,
+    amount: int,
+    mode: app_commands.Choice[str],
+    reason: str | None = None,
+):
+    state = get_season_state()
+
+    if not state.get("active"):
+        return await interaction.response.send_message(
+            "❌ No active seasonal boss.",
+            ephemeral=True,
+        )
+
+    boss = state.get("boss", {})
+    boss_name = boss.get("name", "The Boss")
+
+    old_hp = int(boss.get("hp", 0))
+    max_hp = int(boss.get("max_hp", 1))
+
+    if amount <= 0:
+        return await interaction.response.send_message(
+            "❌ Amount must be greater than 0.",
+            ephemeral=True,
+        )
+
+    if mode.value == "add":
+        boss["hp"] = min(max_hp, old_hp + amount)
+        delta = boss["hp"] - old_hp
+
+        title = "🩹 The Boss Regroups!"
+        description = (
+            f"Dark energy stitches itself back into **{boss_name}**.\n\n"
+            f"💚 **{boss_name}** recovers **{delta} HP**."
+        )
+        color = discord.Color.green()
+
+    else:  # reduce
+        boss["hp"] = max(0, old_hp - amount)
+        delta = old_hp - boss["hp"]
+
+        aid = roll_guild_hero_strike()
+        title = "⚔️ Guild Hero Strike!"
+        description = (
+            f"**{aid['name']}** arrives—{aid['tagline']}.\n"
+            f"{aid['hit']}\n\n"
+            f"🩸 **{boss_name}** takes **{delta} damage**."
+        )
+
+        color = discord.Color.red()
+
+        # If boss hits 0, end event cleanly (same rules as resolve_daily_boss)
+        if boss["hp"] <= 0:
+            state["active"] = False
+            state["ended_reason"] = "boss_defeated"
+
+    if reason:
+        description += f"\n\n*{reason}*"
+
+    save_season(state)
+
+    # Update the main seasonal embed
+    await update_seasonal_embed(bot)
+
+    # Post narrative embed to the channel
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=color,
+    )
+
+    # Optional: show boss thumbnail like the main embed does
+    if boss.get("avatar_url"):
+        embed.set_thumbnail(url=boss["avatar_url"])
+
+    await interaction.channel.send(embed=embed)
+
+    await interaction.response.send_message(
+        f"✅ {mode.name} applied to {boss_name}. (HP: {old_hp} → {boss['hp']})",
+        ephemeral=True,
+    )
 
 @bot.tree.command(name="season_boss_set",description="Admin: Edit the seasonal boss (name, HP, avatar).")
 @app_commands.default_permissions(manage_guild=True)

@@ -40,9 +40,11 @@ def build_seasonal_embed():
 
     boss_type = state.get("boss_type", "seasonal")
 
-    target_txt = f" → {FACTIONS[last_target].name}" if last_target in FACTIONS else ""
+    target_txt = f" to {FACTIONS[last_target].name}" if last_target in FACTIONS else ""
 
-    yesterday_line = f"**Yesterday:** dealt **{last_net}** • boss hit **{last_ret}**{target_txt}\n"
+    yesterday_line = f"**Yesterday:** Factions dealt **{last_net}** • boss dealt **{last_ret}**{target_txt}\n"
+
+    recap = f"\n\n**Final Day Recap:** dealt **{last_net}** • boss hit **{last_ret}**{target_txt}"
 
     # 🏁 Ended state
     if not state.get("active"):
@@ -50,14 +52,14 @@ def build_seasonal_embed():
 
         if reason is None:
             title = f"🌙 Seasonal Event — {boss['name']}"
-            desc = "No active boss right now.\n\nUse `/season_boss_set` to start a new fight."
+            desc = "No active boss right now.\n\nUse `/season_boss_set` to start a new fight." + recap
             color = discord.Color.dark_grey()
 
         elif reason == "boss_defeated":
             title = f"🏆 Seasonal Event — {boss['name']}"
             desc = (
                 "The boss has been defeated.\n\n"
-                "**Victory for the guild!**"
+                "**Victory for the guild!**" + recap
             )
             color = discord.Color.gold()
 
@@ -65,7 +67,7 @@ def build_seasonal_embed():
             title = f"⏳ Seasonal Event — {boss['name']}"
             desc = (
                 "Time has expired.\n\n"
-                "**The boss endures — and the guild must regroup.**"
+                "**The boss endures — and the guild must regroup.**" + recap
             )
             color = discord.Color.dark_red()
 
@@ -73,7 +75,7 @@ def build_seasonal_embed():
             title = f"💀 Seasonal Event — {boss['name']}"
             desc = (
                 "All factions have fallen.\n\n"
-                "**The boss reigns supreme.**"
+                "**The boss reigns supreme.**" +recap
             )
             color = discord.Color.dark_red()
 
