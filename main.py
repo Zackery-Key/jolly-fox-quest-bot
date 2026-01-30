@@ -85,7 +85,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 GUILD_HERO_STRIKES = [
     {
         "name": "Orlin The Vigilant Gatekeeper",
-        "tagline": "raises a hand and the air collapses into a perfect circle of force",
+        "tagline": "raising a hand as the air collapses into a perfect circle of force",
         "hit": (
             "A crushing arcane singularity detonates point-blank, "
             "ripping armor, bone, and magic apart in the same breath."
@@ -93,16 +93,16 @@ GUILD_HERO_STRIKES = [
     },
     {
         "name": "Celara The Grand Archivist",
-        "tagline": "slams her staff into the ground and calls the names of fallen champions",
+        "tagline": "slamming her staff into the ground  as she calls the names of fallen champions",
         "hit": (
-            "Spectral figures tear out of the air like a breaking line—"
+            "Spectral figures tear out of the air like a breaking line; "
             "charging, striking, and overwhelming the foe in a coordinated assault "
             "that hits with the weight of countless battles fought and won."
         )
     },
     {
         "name": "Tiberion The Honored Oathbound",
-        "tagline": "charges like a falling star, shield first, blade following",
+        "tagline": "charging like a falling star, shield first, blade following",
         "hit": (
             "The impact is cathedral-loud. Radiant power sears through the strike, "
             "pinning the foe in place long enough for the guild to carve the moment open."
@@ -110,7 +110,7 @@ GUILD_HERO_STRIKES = [
     },
     {
         "name": "Trinity The Great Tactician",
-        "tagline": "slides in with a commander’s calm and a duelist’s precision",
+        "tagline": "sliding in with a commander’s authoriy and a duelist’s grace",
         "hit": (
             "In a blur of motion, she dismantles the enemy’s stance, driving it where it cannot recover. "
             "The monster stumbles, suddenly fighting on her terms."
@@ -206,7 +206,12 @@ async def seasonal_midnight_loop(bot: discord.Client):
 
         # ⏳ Time limit: if the boss is still alive after max_days, the boss wins
         max_days = int(state.get("max_days", 0) or 0)
-        if state.get("active") and max_days > 0 and state["day"] > max_days:
+        if (
+            state.get("active")
+            and max_days > 0
+            and state["day"] > max_days
+            and state.get("ended_reason") is None
+        ):
             state["active"] = False
             state["ended_reason"] = "time_expired"
 
@@ -1210,10 +1215,15 @@ async def season_resolve_now(interaction: discord.Interaction):
     state["day"] = int(state.get("day", 1)) + 1
 
     max_days = int(state.get("max_days", 0) or 0)
-    if state.get("active") and max_days > 0 and state["day"] > max_days:
+    if (
+        state.get("active")
+        and max_days > 0
+        and state["day"] > max_days
+        and state.get("ended_reason") is None
+    ):
         state["active"] = False
         state["ended_reason"] = "time_expired"
-
+        
     # 🔄 FORCE reset votes (important)
     reset_votes_for_new_day(state, force=True)
 
@@ -1423,7 +1433,7 @@ async def season_boss_adjust(
         aid = roll_guild_hero_strike()
         title = "⚔️ Guild Hero Strike!"
         description = (
-            f"**{aid['name']}** arrives—{aid['tagline']}.\n"
+            f"**{aid['name']}** arrives {aid['tagline']}.\n\n"
             f"{aid['hit']}\n\n"
             f"🩸 **{boss_name}** takes **{delta} damage**."
         )
