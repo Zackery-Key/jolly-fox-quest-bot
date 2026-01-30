@@ -111,16 +111,25 @@ def build_seasonal_embed():
         embed.add_field(
             name=f"{faction.emoji} {faction.name}",
             value=(
+                f"❤️ HP: **{fhp} / {fmax}**\n"
                 f"⚔️ Attack: **{eff_atk}**{atk_note}\n"
                 f"🛡️ Defend: **{eff_dfn}**{dfn_note}\n"
                 f"💚 Heal: **{eff_heal}**{heal_note}\n"
                 f"⚡ Power: **{pwr}** ({power_status})\n"
-                + (f"_Power votes also count as **{default_action}** today._" if default_action else "")
+                + (f"_Power votes also count as **{default_action}**._" if default_action else "")
             ),
             inline=True,
         )
 
-    embed.set_footer(text="Votes reset daily • Factionless members cannot vote")
+    embed.set_footer(
+        text=(
+            "⚡ Faction Powers — "
+            "Spellfire: increases all damage dealt by 75% for the day • "
+            "Shieldborne: negates the boss’s retaliation for the day • "
+            "Verdant: heals all factions for 25% of their max HP | "
+            "Votes reset daily • Factionless members cannot vote"
+        )
+    )
 
     return embed
 
