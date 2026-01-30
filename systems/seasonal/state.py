@@ -144,22 +144,41 @@ def resolve_daily_boss(state: dict) -> dict:
         dfn = len(actions.get("defend", []))
         heal = len(actions.get("heal", []))
         pwr = len(actions.get("power", []))
+
+        # Power votes also count as the faction's default action
+        default_action = {
+            "spellfire": "attack",
+            "shieldborne": "defend",
+            "verdant": "heal",
+        }.get(faction_id)
+
+        eff_atk, eff_dfn, eff_heal = atk, dfn, heal
+        if default_action == "attack":
+            eff_atk += pwr
+        elif default_action == "defend":
+            eff_dfn += pwr
+        elif default_action == "heal":
+            eff_heal += pwr
+
         total_votes += atk + dfn + heal + pwr
 
         per_faction_counts[faction_id] = {
-            "attack": atk, "defend": dfn, "heal": heal, "power": pwr
+            "attack": atk, "defend": dfn, "heal": heal, "power": pwr,
+            "eff_attack": eff_atk, "eff_defend": eff_dfn, "eff_heal": eff_heal,
         }
 
-        total_attack += atk
-        total_defend += dfn
-        total_heal += heal
+        total_attack += eff_atk
+        total_defend += eff_dfn
+        total_heal += eff_heal
 
+        # Passive bonuses apply to the effective action totals
         if faction_id == "spellfire":
-            bonus_attack += atk * SPELLFIRE_ATTACK_BONUS
+            bonus_attack += eff_atk * SPELLFIRE_ATTACK_BONUS
         if faction_id == "shieldborne":
-            bonus_defense += dfn * SHIELDBORNE_DEFENSE_BONUS
+            bonus_defense += eff_dfn * SHIELDBORNE_DEFENSE_BONUS
         if faction_id == "verdant":
-            bonus_heal += heal * VERDANT_HEAL_BONUS
+            bonus_heal += eff_heal * VERDANT_HEAL_BONUS
+
 
     # -----------------------------
     # Power activation

@@ -9,6 +9,9 @@ SEASON_FILE = os.path.join(DATA_DIR, "seasonal_event.json")
 DEFAULT_SEASON_STATE = {
     "active": False,
     "day": 1,
+    "max_days": 7,
+    "started_on": "",
+    "ended_reason": None,
     "date": "",
     "difficulty": "normal",
     "boss_type": "seasonal",
@@ -70,6 +73,9 @@ def load_season():
     data.setdefault("faction_powers", DEFAULT_SEASON_STATE["faction_powers"])
     data.setdefault("faction_health", DEFAULT_SEASON_STATE["faction_health"])
     data.setdefault("boss", DEFAULT_SEASON_STATE["boss"])
+    data.setdefault("max_days", DEFAULT_SEASON_STATE.get("max_days", 7))
+    data.setdefault("started_on", DEFAULT_SEASON_STATE.get("started_on", ""))
+    data.setdefault("ended_reason", data.get("ended_reason", None))
     data.setdefault("votes", DEFAULT_SEASON_STATE["votes"])
     data.setdefault("embed", DEFAULT_SEASON_STATE["embed"])
     data.setdefault("alive_factions", [])

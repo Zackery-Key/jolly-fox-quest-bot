@@ -9,6 +9,9 @@ def build_seasonal_embed():
     state = get_season_state()
     boss = state["boss"]
     difficulty = state.get("difficulty", "normal").title()
+    day = int(state.get("day", 1))
+    max_days = int(state.get("max_days", 0) or 0)
+    day_line = f"**Day:** {day} / {max_days}\n" if max_days > 0 else ""
     boss_type = state.get("boss_type", "seasonal")
 
     # 🏁 Ended state
@@ -22,6 +25,14 @@ def build_seasonal_embed():
                 "**Victory for the guild!**"
             )
             color = discord.Color.gold()
+
+        elif reason == "time_expired":
+            title = f"⏳ Seasonal Event — {boss['name']}"
+            desc = (
+                "Time has expired.\n\n"
+                "**The boss endures — and the guild must regroup.**"
+            )
+            color = discord.Color.dark_red()
         else:
             title = f"💀 Seasonal Event — {boss['name']}"
             desc = (
@@ -44,6 +55,7 @@ def build_seasonal_embed():
         title=f"{label} — {boss['name']}",
         description=(
             f"**Threat Level:** {difficulty}\n"
+            f"{day_line}"
             f"**HP:** {boss['hp']} / {boss['max_hp']}\n\n"
             "Each day, choose how you and your faction responds.\n"
             "_You may change your vote, but only one counts._"
@@ -63,6 +75,25 @@ def build_seasonal_embed():
         heal = len(votes.get("heal", []))
         pwr = len(votes.get("power", []))
 
+        default_action = {
+            "spellfire": "attack",
+            "shieldborne": "defend",
+            "verdant": "heal",
+        }.get(faction_id)
+
+        eff_atk, eff_dfn, eff_heal = atk, dfn, heal
+        if default_action == "attack":
+            eff_atk += pwr
+        elif default_action == "defend":
+            eff_dfn += pwr
+        elif default_action == "heal":
+            eff_heal += pwr
+
+        # Optional “incl. X power” text only on the default action line
+        atk_note = f" _(incl. {pwr} power)_" if (default_action == "attack" and pwr > 0) else ""
+        dfn_note = f" _(incl. {pwr} power)_" if (default_action == "defend" and pwr > 0) else ""
+        heal_note = f" _(incl. {pwr} power)_" if (default_action == "heal" and pwr > 0) else ""
+
         # faction HP display (if exists)
         fh = state.get("faction_health", {}).get(faction_id, {})
         fhp = fh.get("hp", 0)
@@ -80,11 +111,11 @@ def build_seasonal_embed():
         embed.add_field(
             name=f"{faction.emoji} {faction.name}",
             value=(
-                f"❤️ HP: **{fhp} / {fmax}**\n"
-                f"⚔️ Attack: **{atk}**\n"
-                f"🛡️ Defend: **{dfn}**\n"
-                f"💚 Heal: **{heal}**\n"
-                f"⚡ Power: **{pwr}** ({power_status})"
+                f"⚔️ Attack: **{eff_atk}**{atk_note}\n"
+                f"🛡️ Defend: **{eff_dfn}**{dfn_note}\n"
+                f"💚 Heal: **{eff_heal}**{heal_note}\n"
+                f"⚡ Power: **{pwr}** ({power_status})\n"
+                + (f"_Power votes also count as **{default_action}** today._" if default_action else "")
             ),
             inline=True,
         )

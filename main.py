@@ -102,10 +102,9 @@ async def update_seasonal_embed(bot):
         # 🧠 Choose view based on event state
         view = SeasonalVoteView() if state.get("active") else SeasonalEndedView()
 
-        await message.edit(
-            embed=build_seasonal_embed(),
-            view=view,
-        )
+        await message.edit(embed=build_seasonal_embed(), view=view)
+
+
 
     except Exception as e:
         print(f"[SEASON] Failed to update embed: {e}")
@@ -159,8 +158,18 @@ async def seasonal_midnight_loop(bot: discord.Client):
         # 🔥 Resolve the day
         summary = resolve_daily_boss(state)
 
+        # 📅 Advance the day counter (day starts at 1)
+        state["day"] = int(state.get("day", 1)) + 1
+
+        # ⏳ Time limit: if the boss is still alive after max_days, the boss wins
+        max_days = int(state.get("max_days", 0) or 0)
+        if state.get("active") and max_days > 0 and state["day"] > max_days:
+            state["active"] = False
+            state["ended_reason"] = "time_expired"
+
         # 🔄 Reset votes for the new day
-        reset_votes_for_new_day(state)
+        if state.get("active"):
+            reset_votes_for_new_day(state)
 
         # 💾 Persist state
         save_season(state)
@@ -175,10 +184,9 @@ async def seasonal_midnight_loop(bot: discord.Client):
             if channel:
                 try:
                     message = await channel.fetch_message(message_id)
-                    await message.edit(
-                        embed=build_seasonal_embed(),
-                        view=SeasonalVoteView(),
-                    )
+                    view = SeasonalVoteView() if state.get("active") else SeasonalEndedView()
+                    await message.edit(embed=build_seasonal_embed(), view=view)
+
                 except Exception as e:
                     print(f"[SEASON] Failed to update embed: {e}")
 
@@ -230,6 +238,9 @@ def initialize_season_boss_and_factions(
 
     # Mark season active
     state["active"] = True
+    state["max_days"] = int(target_days)
+    state["started_on"] = str(date.today())
+    state["ended_reason"] = None
     state["day"] = 1
 
     # 🟢 New boss = everyone alive again
