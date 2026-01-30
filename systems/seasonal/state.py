@@ -5,6 +5,10 @@ from .storage import load_season, save_season
 BASE_ATTACK_DAMAGE = 10
 BASE_DEFENSE_REDUCTION = 6
 BASE_HEAL = 8
+ESCULATION_PER_DAY = {
+    "minor": 4,      # gentle ramp
+    "seasonal": 7,   # sharper ramp
+}
 
 # Passive faction identity bonuses (only when that faction votes that action)
 SHIELDBORNE_DEFENSE_BONUS = 4      # per Shieldborne defend vote
@@ -231,9 +235,15 @@ def resolve_daily_boss(state: dict) -> dict:
     retaliation += (total_votes // 5) * preset["retaliation_per_5_attacks"]
     retaliation -= total_defend * DEFEND_REDUCTION
     retaliation = max(0, retaliation)
+    boss_type = state.get("boss_type", "seasonal")
+    day = int(state.get("day", 1))
+
+    esculation = ESCULATION_PER_DAY.get(boss_type, 7) * max(0, day - 1)
+    retaliation += esculation
 
     retaliation_target = None
     retaliation_applied = 0
+
 
     if not shieldborne_blocks and retaliation > 0:
         targets = [
@@ -298,19 +308,26 @@ def resolve_daily_boss(state: dict) -> dict:
     return {
         "boss_hp_before": boss_hp_before,
         "boss_hp_after": boss["hp"],
+        "net_damage": net_damage,              # ✅ add
+        "raw_damage": raw_damage,              # optional but helpful
+        "defense": defense,                    # optional but helpful
         "retaliation_target": retaliation_target,
+        "retaliation_applied": retaliation_applied,   # ✅ add
         "powers_used": used_today,
         "ended": not state.get("active"),
         "ended_reason": state.get("ended_reason"),
     }
 
 def reset_season_state(state: dict):
-    """
-    Safely reset the seasonal state without deleting the file.
-    """
     state["active"] = False
     state["day"] = 1
     state["date"] = ""
+
+    # ✅ Clear season metadata / summary stats
+    state["ended_reason"] = None
+    state["started_on"] = ""
+    state["last_net_damage"] = 0
+    state["last_retaliation"] = 0
 
     # Reset boss
     boss = state.get("boss", {})
@@ -324,6 +341,11 @@ def reset_season_state(state: dict):
     # Reset faction health
     for fh in state.get("faction_health", {}).values():
         fh["hp"] = fh.get("max_hp", fh.get("hp", 1))
+
+    # ✅ Everyone alive again (important for voting lockout)
+    state["alive_factions"] = {
+        fid for fid, fh in state.get("faction_health", {}).items() if fh["hp"] > 0
+    }
 
     # Reset power usage (unlock stays!)
     for fp in state.get("faction_powers", {}).values():

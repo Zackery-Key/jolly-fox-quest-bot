@@ -158,6 +158,9 @@ async def seasonal_midnight_loop(bot: discord.Client):
         # 🔥 Resolve the day
         summary = resolve_daily_boss(state)
 
+        state["last_net_damage"] = summary.get("net_damage", 0)
+        state["last_retaliation"] = summary.get("retaliation_applied", 0)
+
         # 📅 Advance the day counter (day starts at 1)
         state["day"] = int(state.get("day", 1)) + 1
 
@@ -204,7 +207,7 @@ def initialize_season_boss_and_factions(
     # Assume not all votes are attacks
     expected_attack_votes = max(1, int(expected_votes * 0.45))
 
-    padding = 1.2 if target_days == 5 else 1.4
+    padding = 1.1 if target_days == 5 else 1.25
 
     base_boss_hp = int(
         expected_attack_votes
@@ -1131,6 +1134,7 @@ async def season_reset(interaction: discord.Interaction):
 
     reset_season_state(state)
     save_season(state)
+    await update_seasonal_embed(bot)
 
     await interaction.response.send_message(
         "♻️ **Seasonal state reset safely.**\n"

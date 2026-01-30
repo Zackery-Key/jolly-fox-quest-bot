@@ -12,13 +12,42 @@ def build_seasonal_embed():
     day = int(state.get("day", 1))
     max_days = int(state.get("max_days", 0) or 0)
     day_line = f"**Day:** {day} / {max_days}\n" if max_days > 0 else ""
+    boss_hp = int(boss.get("hp", 0))
+    last_net = int(state.get("last_net_damage", 0) or 0)
+
+    days_left = max(1, max_days - day + 1) if max_days > 0 else 1
+    required_per_day = (boss_hp + days_left - 1) // days_left  # ceil division
+
+    boss_type = state.get("boss_type", "seasonal")
+    day = int(state.get("day", 1))
+
+    ESCULATION_PER_DAY = {
+        "minor": 4,
+        "seasonal": 7,
+    }
+
+    esculation_per_day = ESCULATION_PER_DAY.get(boss_type, 7)
+    esculation_value = esculation_per_day * max(0, day - 1)
+
+    if esculation_value > 0:
+        esculation_line = f"🔥 **Esculation:** +{esculation_value} bonus retaliation (increases daily)\n"
+    else:
+        esculation_line = "🟡 **Esculation:** minimal\n"
+
+    pace_line = f"**Pace:** need ~**{required_per_day}** dmg/day • last: **{last_net}**\n"
+
     boss_type = state.get("boss_type", "seasonal")
 
     # 🏁 Ended state
     if not state.get("active"):
         reason = state.get("ended_reason")
 
-        if reason == "boss_defeated":
+        if reason is None:
+            title = f"🌙 Seasonal Event — {boss['name']}"
+            desc = "No active boss right now.\n\nUse `/season_boss_set` to start a new fight."
+            color = discord.Color.dark_grey()
+
+        elif reason == "boss_defeated":
             title = f"🏆 Seasonal Event — {boss['name']}"
             desc = (
                 "The boss has been defeated.\n\n"
@@ -33,6 +62,7 @@ def build_seasonal_embed():
                 "**The boss endures — and the guild must regroup.**"
             )
             color = discord.Color.dark_red()
+
         else:
             title = f"💀 Seasonal Event — {boss['name']}"
             desc = (
@@ -48,6 +78,7 @@ def build_seasonal_embed():
 
         return embed
 
+
     # ✅ Create embed FIRST
     label = "🟡 Minor Boss" if boss_type == "minor" else "🔴 Seasonal Boss"
 
@@ -56,6 +87,8 @@ def build_seasonal_embed():
         description=(
             f"**Threat Level:** {difficulty}\n"
             f"{day_line}"
+            f"{pace_line}"
+            f"{esculation_line}"
             f"**HP:** {boss['hp']} / {boss['max_hp']}\n\n"
             "Each day, choose how you and your faction responds.\n"
             "_You may change your vote, but only one counts._"
