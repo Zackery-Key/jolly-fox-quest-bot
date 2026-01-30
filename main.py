@@ -1161,6 +1161,19 @@ async def season_resolve_now(interaction: discord.Interaction):
     # 🔥 Resolve immediately
     summary = resolve_daily_boss(state)
 
+    # ✅ Store yesterday summary for the embed
+    state["last_net_damage"] = int(summary.get("net_damage", 0) or 0)
+    state["last_retaliation"] = int(summary.get("retaliation_applied", 0) or 0)
+    state["last_retaliation_target"] = summary.get("retaliation_target")  # optional
+
+    # ✅ Keep day progression consistent with midnight loop
+    state["day"] = int(state.get("day", 1)) + 1
+
+    max_days = int(state.get("max_days", 0) or 0)
+    if state.get("active") and max_days > 0 and state["day"] > max_days:
+        state["active"] = False
+        state["ended_reason"] = "time_expired"
+
     # 🔄 FORCE reset votes (important)
     reset_votes_for_new_day(state, force=True)
 

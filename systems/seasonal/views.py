@@ -14,6 +14,8 @@ def build_seasonal_embed():
     day_line = f"**Day:** {day} / {max_days}\n" if max_days > 0 else ""
     boss_hp = int(boss.get("hp", 0))
     last_net = int(state.get("last_net_damage", 0) or 0)
+    last_ret = int(state.get("last_retaliation", 0) or 0)
+    last_target = state.get("last_retaliation_target")
 
     days_left = max(1, max_days - day + 1) if max_days > 0 else 1
     required_per_day = (boss_hp + days_left - 1) // days_left  # ceil division
@@ -21,22 +23,26 @@ def build_seasonal_embed():
     boss_type = state.get("boss_type", "seasonal")
     day = int(state.get("day", 1))
 
-    ESCULATION_PER_DAY = {
+    ESCALATION_PER_DAY = {
         "minor": 4,
         "seasonal": 7,
     }
 
-    esculation_per_day = ESCULATION_PER_DAY.get(boss_type, 7)
-    esculation_value = esculation_per_day * max(0, day - 1)
+    escalation_per_day = ESCALATION_PER_DAY.get(boss_type, 7)
+    escalation_value = escalation_per_day * max(0, day - 1)
 
-    if esculation_value > 0:
-        esculation_line = f"🔥 **Esculation:** +{esculation_value} bonus retaliation (increases daily)\n"
+    if escalation_value > 0:
+        escalation_line = f"🔥 **Escalation:** +{escalation_value} bonus retaliation (increases daily)\n"
     else:
-        esculation_line = "🟡 **Esculation:** minimal\n"
+        escalation_line = "🟡 **Escalation:** minimal\n"
 
-    pace_line = f"**Pace:** need ~**{required_per_day}** dmg/day • last: **{last_net}**\n"
+    pace_line = f"**Pace:** need ~**{required_per_day}** dmg/day\n"
 
     boss_type = state.get("boss_type", "seasonal")
+
+    target_txt = f" → {FACTIONS[last_target].name}" if last_target in FACTIONS else ""
+
+    yesterday_line = f"**Yesterday:** dealt **{last_net}** • boss hit **{last_ret}**{target_txt}\n"
 
     # 🏁 Ended state
     if not state.get("active"):
@@ -88,7 +94,8 @@ def build_seasonal_embed():
             f"**Threat Level:** {difficulty}\n"
             f"{day_line}"
             f"{pace_line}"
-            f"{esculation_line}"
+            f"{yesterday_line}"
+            f"{escalation_line}"
             f"**HP:** {boss['hp']} / {boss['max_hp']}\n\n"
             "Each day, choose how you and your faction responds.\n"
             "_You may change your vote, but only one counts._"

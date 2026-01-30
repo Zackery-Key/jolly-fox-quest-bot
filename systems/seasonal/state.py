@@ -5,7 +5,7 @@ from .storage import load_season, save_season
 BASE_ATTACK_DAMAGE = 10
 BASE_DEFENSE_REDUCTION = 6
 BASE_HEAL = 8
-ESCULATION_PER_DAY = {
+ESCALATION_PER_DAY = {
     "minor": 4,      # gentle ramp
     "seasonal": 7,   # sharper ramp
 }
@@ -238,8 +238,8 @@ def resolve_daily_boss(state: dict) -> dict:
     boss_type = state.get("boss_type", "seasonal")
     day = int(state.get("day", 1))
 
-    esculation = ESCULATION_PER_DAY.get(boss_type, 7) * max(0, day - 1)
-    retaliation += esculation
+    escalation = ESCALATION_PER_DAY.get(boss_type, 7) * max(0, day - 1)
+    retaliation += escalation
 
     retaliation_target = None
     retaliation_applied = 0
